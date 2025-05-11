@@ -66,7 +66,7 @@ header {
     justify-content: space-between; /* Aligns children elements to the space between */
     align-items: center; /* Vertically centers the items in the flex container */
     padding: 20px;
-    margin: 20px auto; /* Center the box and maintain outer spacing */
+    margin: 20px; /* Center the box and maintain outer spacing */
     width: 80%; /* Control the width of the content */
 }
 
@@ -78,3 +78,29 @@ header {
     font-size: 14px; /* Smaller font size for contact details */
 }
 
+.name-and-links {
+    text-align: center; /* Ensures centered alignment */
+    margin-bottom: 0; /* Removes any bottom margin from the name container */
+    padding-bottom: 0; /* Removes any bottom padding from the name container */
+}
+
+.name-and-links h1 {
+    margin-bottom: 5px; /* Minimalistic margin to keep tight spacing */
+}
+
+.social-links {
+    margin-top: 0; /* Removes top margin */
+    padding-top: 0; /* Eliminates padding to reduce space */
+}
+
+.social-links a {
+    margin: 0 10px; /* Keeps horizontal spacing between icons */
+    color: #333; /* Icon color */
+    font-size: 24px; /* Icon size */
+    text-decoration: none; /* Removes underline/underscore */
+}
+
+.social-links a:hover {
+    color: #555; /* Changes icon color on hover for visual feedback */
+    text-decoration: none; /* Ensure underline doesn't appear on hover either */
+}
