@@ -17,32 +17,77 @@ body {
 
 }
 
+/* -webkit-mask: 
+linear-gradient(to top,  transparent 1%, #fff 15% 90%, transparent 95%),
+linear-gradient(to left, transparent 1%, #fff 15% 90%, transparent 95%);
+-webkit-mask-size:100% 100%;
+-webkit-mask-position:center;
+-webkit-mask-repeat:no-repeat;
+-webkit-mask-composite: source-in;
+
+
+mask: 
+    linear-gradient(to top,  transparent 1%, #fff 15% 90%, transparent 95%),
+    linear-gradient(to left, transparent 1%, #fff 15% 90%, transparent 95%);
+mask-size: 100% 100%;
+mask-position: center;
+mask-repeat:no-repeat;
+mask-composite: intersect; */
+
 .main-container {
-    background-color: rgba(97, 97, 97, 0.02); /* Set background color and opacity */
-    padding: 20px; /* Add padding around the text */
-    margin: 30px auto; /* Center the box and add margin around it */
-    width: 100%; /* Control the width of the content box */
-    backdrop-filter: blur(8px) brightness(1.0); /* Apply blur effect */
-
-    justify-content: space-between;
-    align-items: center;
+    position: relative;  /* Base positioning for absolute children */
+    width: 100%;
+    max-width: 600px;
+    /* margin: 20px auto; */
     padding: 20px;
-    margin: 0px auto;
     box-sizing: border-box;
-    -webkit-backdrop-filter: blur(15px);
-    backdrop-filter: blur(15px);
-    mask-image: linear-gradient(to left,    rgba(0, 0, 0, 0) 0%,    black 5%, black 100%);
+    overflow: hidden;  /* Keeps the background layer within the container bounds */
 }
 
-.main-container::after{
+.background-layer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(97, 97, 97, 0.02);
+    backdrop-filter: blur(8px) brightness(1);
+    /* transform: scale(1.2); */
+    transform-origin: center; /* Ensure the scaling expands from the center */
 
+    /* Adjusted Mask with increased range for scaled size */
+    -webkit-mask:
+        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
+    -webkit-mask-size: cover; /* Ensuring mask fully covers the scaled area */
+    -webkit-mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-composite: source-in;
+
+    mask:
+        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
+    mask-size: cover; /* Ensuring mask fully covers the scaled area */
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-composite: intersect;
+
+    z-index: 1; 
+    
+    /* transform: scale(1.2); */
 }
 
-.blur-wrapper {
-    padding: 10px; /* Larger padding induces a greater spread of backdrop-filter */
-    backdrop-filter: blur(5px) brightness(1.01);
-    margin: -10px; /* Adjust margin to align with the main container visually */
+.content-layer {
+    position: relative; /* Ensures content is positioned above background */
+    z-index: 2;  /* Higher than background-layer */
+    padding: 40px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    /* Ensure all content margins, padding are handled here */
 }
+
+
 
 .conference-proceeding {
     display: flex;
@@ -69,9 +114,9 @@ body {
 header {
     background-color: rgba(158, 152, 152, 0.2); /* Set background color and opacity */
     padding: 10px; /* Add padding around the text */
-    margin: 10px auto; /* Center the box and add margin around it */
     width: 100%; /* Control the width of the content box */
     backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
+    
 }
 
 .header-content {
@@ -79,7 +124,6 @@ header {
     justify-content: space-between; /* Aligns children elements to the space between */
     align-items: center; /* Vertically centers the items in the flex container */
     padding: 20px;
-    margin: 20px; /* Center the box and maintain outer spacing */
     width: 80%; /* Control the width of the content */
 }
 
@@ -118,3 +162,9 @@ header {
     text-decoration: none; /* Ensure underline doesn't appear on hover either */
 }
 
+hr {
+    border: none;         /* Removes default border styles */
+    height: 1px;          /* Sets the height of the HR line */
+    background-color: rgb(0, 0, 0); /* Makes the HR line solid white */
+    margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
+}
