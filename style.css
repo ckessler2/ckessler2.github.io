@@ -5,7 +5,7 @@ body {
     text-transform: none;
     padding: 20px;
     width: 100%;  /* Set this to the desired width based on your A4 calculation */
-    max-width: 600px;
+    max-width: 800px;
     margin: 30px auto;
     box-sizing: border-box;
 
@@ -37,7 +37,7 @@ mask-composite: intersect; */
 .main-container {
     position: relative;  /* Base positioning for absolute children */
     width: 100%;
-    max-width: 600px;
+    max-width: 700px;
     /* margin: 20px auto; */
     padding: 20px;
     box-sizing: border-box;
@@ -91,15 +91,18 @@ mask-composite: intersect; */
 
 .conference-proceeding {
     display: flex;
-    align-items: center; /* Centers the items vertically */
+    align-items: flex-start; /* Aligns the items at the top */
 }
- 
+
 .conference-proceeding .image {
-    margin-right: 20px; /* Adds space between the image and the text */
+    width: 140px; /* Fixed width to your spec */
+    height: auto; /* Maintain aspect ratio */
+    margin-right: 20px; /* Space between image and text */
 }
 
 .text-content {
-    flex: 1;  /* Takes up the remaining space */
+    flex: 1; /* Takes up the remaining horizontal space */
+    margin-top: -25px;
 }
 
 .conference-proceeding .image {
