@@ -1,0 +1,158 @@
+body {
+  line-height: 1.5;
+  /* 1 */
+  -webkit-text-size-adjust: 100%;
+  /* 2 */
+  -moz-tab-size: 4;
+  /* 3 */
+  -o-tab-size: 4;
+     tab-size: 4;
+  /* 3 */
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  /* 4 */
+  font-feature-settings: normal;
+  /* 5 */
+}
+
+
+body {
+    /* font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica,
+    Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol; */
+    text-transform: none;
+    padding: 20px;
+    width: 100%;  /* Set this to the desired width based on your A4 calculation */
+    max-width: 1000px;
+    margin: 30px auto;
+    box-sizing: border-box;
+
+    background-color: black; /* Sets the background image */
+    background-size: cover; /* Ensures the background image covers the entire element */
+    background-position: center; /* Centers the background image */
+    background-repeat: no-repeat; /* Prevents the background image from repeating */
+    min-height: 50vh; /* Optional: Ensure the body covers at least the whole viewport height */
+    color:white;
+}
+
+
+
+
+
+header {
+    background-color: rgba(158, 152, 152, 0.2); /* Set background color and opacity */
+    padding: 10px; /* Add padding around the text */
+    width: 500px; /* Control the width of the content box */
+    backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
+    
+}
+
+.header-content {
+    display: flex; /* Activates flexbox layout */
+    justify-content: space-around; /* Aligns children elements to the space between */
+    align-items: center; /* Vertically centers the items in the flex container */
+    width: 73%; /* Full width of their parent element */
+    padding: 0 20px;
+}
+
+
+.contact-info p {
+    margin: 0;
+    margin-top: 5px;
+    margin-left: 0px;
+    padding: 2px 0; /* Tiny padding for spacing between info lines */
+    color: #333; /* Dark grey text color */
+    font-size: 14px; /* Smaller font size for contact details */
+    width: 100%; /* Full width of their parent element */
+    padding: 0 20px;
+    text-align: center; /* Ensures centered alignment */
+}
+
+.contact-info > :first-child {
+    margin-top: 25px; /* Adds top margin only to the first element within .contact-info */
+}
+
+.name-and-links {
+    text-align: center; /* Ensures centered alignment */
+    margin-bottom: 0; /* Removes any bottom margin from the name container */
+    padding-bottom: 0; /* Removes any bottom padding from the name container */
+    width: 100%; /* Full width of their parent element */
+    padding: 0 20px;
+}
+
+.name-and-links h1 {
+    margin-bottom: 5px; /* Minimalistic margin to keep tight spacing */
+}
+
+.social-links {
+    margin-top: 0; /* Removes top margin */
+    padding-top: 0; /* Eliminates padding to reduce space */
+}
+
+.social-links a {
+    margin: 0 10px; /* Keeps horizontal spacing between icons */
+    color: #333; /* Icon color */
+    font-size: 24px; /* Icon size */
+    text-decoration: none; /* Removes underline/underscore */
+}
+
+.social-links a:hover {
+    color: #ff0000; /* Changes icon color on hover for visual feedback */
+    text-decoration: none; /* Ensure underline doesn't appear on hover either */
+}
+
+hr {
+    border: none;         /* Removes default border styles */
+    height: 1px;          /* Sets the height of the HR line */
+    background-color: rgb(0, 0, 0); /* Makes the HR line solid white */
+    margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
+}
+
+
+
+.container {
+    display: flex; /* Using flexbox for layout */
+    flex-wrap: wrap; /* Allows flex items to wrap onto the next line */
+    align-items: flex-start; /* Aligns items at the start of the flex container */
+    justify-content: center; /* Centers items horizontally */
+    height: auto; /* Adjusted from 100vh to suit content height */
+    min-height: 100vh; /* Ensures that the container takes at least the full height of the viewport */
+    padding: 30px;
+}
+
+.image-section {
+    flex: 1; /* Flex grow larger */
+    max-width: 30%; /* Maximum width for the image section */
+    padding: 10px;
+    box-sizing: border-box; /* Includes padding and border in the element's total width and height */
+}
+
+.text-section {
+    flex: 3; /* Gives more space to the text section relative to the image */
+    max-width: 70%; /* Maximum width for the text section */
+    padding: 10px;
+    text-align: left; /* Aligns text to the left */
+    margin-left: 200px;
+}
+
+#profile-pic {
+    width: 400px; /* Makes the image responsive */
+    height: auto; /* Maintains aspect ratio */
+    display: block;
+    margin: 0 auto; /* Centers image horizontally */
+}
+
+@media (max-width: 800px) {
+    .container {
+        flex-direction: column; /* Stacks the layout vertically on smaller screens */
+        align-items: center;
+    }
+
+    .text-section {
+        max-width: 400px; /* Allows each section to take the full width */
+        margin-left: 0px;
+        margin-top: -120px;
+    }
+
+    .image-section{
+        max-width: 100%;
+    }
+}
