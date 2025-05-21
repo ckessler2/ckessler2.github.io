@@ -106,7 +106,9 @@ hr {
     margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
 }
 
-
+a {
+  color: hotpink;
+}
 
 .container {
     display: flex; /* Using flexbox for layout */
