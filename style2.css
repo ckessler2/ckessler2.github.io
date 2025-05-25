@@ -162,14 +162,25 @@ a {
 
 .photo-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* Creates columns that grow and shrink but no smaller than 250px */
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     grid-gap: 20px; /* Space between each photo */
     padding: 20px;
-    margin-top: 20px; /* Adds space above the grid */
+    margin-top: 20px;
 }
 
-img {
-    width: 100%; /* Ensures each image fills the column width */
-    height: auto; /* Keeps image aspect ratio */
-     /*border-radius: 5px; Optional: Adds rounded corners to each image */
+.photo-grid img {
+    width: 100%;
+    height: 200px;  /* Using auto to maintain aspect ratio without specific height */
+    object-fit: cover;
+    border-radius: 5px;
+}
+
+/* Let certain images take up more space */
+.photo-grid .span-two-columns {
+    grid-column: span 2; /* Makes the image span two columns */
+}
+
+.photo-grid .span-two-rows {
+    grid-row: span 2; /* Makes the image span two rows */
+    height: auto;
 }
