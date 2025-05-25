@@ -40,7 +40,7 @@ body {
 header {
     background-color: rgba(158, 152, 152, 0.2); /* Set background color and opacity */
     padding: 10px; /* Add padding around the text */
-    width: 500px; /* Control the width of the content box */
+    width: 100%; /* Control the width of the content box */
     backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
     
 }
@@ -116,7 +116,7 @@ a {
     align-items: flex-start; /* Aligns items at the start of the flex container */
     justify-content: center; /* Centers items horizontally */
     height: auto; /* Adjusted from 100vh to suit content height */
-    min-height: 100vh; /* Ensures that the container takes at least the full height of the viewport */
+    min-height: 10vh; /* Ensures that the container takes at least the full height of the viewport */
     padding: 30px;
 }
 
@@ -157,4 +157,19 @@ a {
     .image-section{
         max-width: 100%;
     }
+
+}
+
+.photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* Creates columns that grow and shrink but no smaller than 250px */
+    grid-gap: 20px; /* Space between each photo */
+    padding: 20px;
+    margin-top: 20px; /* Adds space above the grid */
+}
+
+img {
+    width: 100%; /* Ensures each image fills the column width */
+    height: auto; /* Keeps image aspect ratio */
+     /*border-radius: 5px; Optional: Adds rounded corners to each image */
 }
