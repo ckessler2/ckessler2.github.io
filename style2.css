@@ -172,7 +172,7 @@ a {
     width: 100%;
     height: 200px;  /* Using auto to maintain aspect ratio without specific height */
     object-fit: cover;
-    border-radius: 5px;
+    /* border-radius: 5px; */
 }
 
 /* Let certain images take up more space */
@@ -183,4 +183,8 @@ a {
 .photo-grid .span-two-rows {
     grid-row: span 2; /* Makes the image span two rows */
     height: auto;
+}
+
+.photo-grid .align-top {
+    object-position: top; /* Align the bottom part of the image in the frame */
 }
