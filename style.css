@@ -1,19 +1,167 @@
 
 body {
-font-family: Tahoma, sans-serif;
-font-size: 15px;
-letter-spacing: 0px;
-word-spacing: 2px;
-color: #000000;
-font-weight: normal;
-text-decoration: none;
-font-style: normal;
-font-variant: normal;
-text-transform: none;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica,
+    Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
+    text-transform: none;
+    padding: 20px;
+    width: 100%;  /* Set this to the desired width based on your A4 calculation */
+    max-width: 800px;
+    margin: 30px auto;
+    box-sizing: border-box;
+
+    background-image: url('figures/background.jpg'); /* Sets the background image */
+    background-size: cover; /* Ensures the background image covers the entire element */
+    background-position: center; /* Centers the background image */
+    background-repeat: no-repeat; /* Prevents the background image from repeating */
+    min-height: 50vh; /* Optional: Ensure the body covers at least the whole viewport height */
+
 }
 
-body {background-color: #d8fffd}
+.main-container {
+    position: relative;  /* Base positioning for absolute children */
+    width: 100%;
+    max-width: 700px;
+    /* margin: 20px auto; */
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden;  /* Keeps the background layer within the container bounds */
+}
+
+.background-layer {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(97, 97, 97, 0.02);
+    backdrop-filter: blur(8px) brightness(1);
+    /* transform: scale(1.2); */
+    transform-origin: center; /* Ensure the scaling expands from the center */
+
+    /* Adjusted Mask with increased range for scaled size */
+    -webkit-mask:
+        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
+    -webkit-mask-size: cover; /* Ensuring mask fully covers the scaled area */
+    -webkit-mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-composite: source-in;
+
+    mask:
+        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
+        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
+    mask-size: cover; /* Ensuring mask fully covers the scaled area */
+    mask-position: center;
+    mask-repeat: no-repeat;
+    mask-composite: intersect;
+
+    z-index: 1; 
+    
+    /* transform: scale(1.2); */
+}
+
+.content-layer {
+    position: relative; /* Ensures content is positioned above background */
+    z-index: 2;  /* Higher than background-layer */
+    padding: 40px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    /* Ensure all content margins, padding are handled here */
+}
+
+
+
+.conference-proceeding {
+    display: flex;
+    align-items: flex-start; /* Aligns the items at the top */
+}
+
+.conference-proceeding .image {
+    width: 140px; /* Fixed width to your spec */
+    height: auto; /* Maintain aspect ratio */
+    margin-right: 20px; /* Space between image and text */
+}
+
+.text-content {
+    flex: 1; /* Takes up the remaining horizontal space */
+    margin-top: -25px;
+}
+
+.conference-proceeding .image {
+    width: 140px;  /* Set the width to your desired size */
+    height: auto;  /* This ensures that the aspect ratio is maintained */
+    margin-right: 20px;
+}
 
 
 
 
+header {
+    background-color: rgba(158, 152, 152, 0.2); /* Set background color and opacity */
+    padding: 10px; /* Add padding around the text */
+    width: 500px; /* Control the width of the content box */
+    backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
+    
+}
+
+.header-content {
+    display: flex; /* Activates flexbox layout */
+    justify-content: space-around; /* Aligns children elements to the space between */
+    align-items: center; /* Vertically centers the items in the flex container */
+    width: 73%; /* Full width of their parent element */
+    padding: 0 20px;
+}
+
+
+.contact-info p {
+    margin: 0;
+    margin-top: 5px;
+    margin-left: 0px;
+    padding: 2px 0; /* Tiny padding for spacing between info lines */
+    color: #333; /* Dark grey text color */
+    font-size: 14px; /* Smaller font size for contact details */
+    width: 100%; /* Full width of their parent element */
+    padding: 0 20px;
+    text-align: center; /* Ensures centered alignment */
+}
+
+.contact-info > :first-child {
+    margin-top: 25px; /* Adds top margin only to the first element within .contact-info */
+}
+
+.name-and-links {
+    text-align: center; /* Ensures centered alignment */
+    margin-bottom: 0; /* Removes any bottom margin from the name container */
+    padding-bottom: 0; /* Removes any bottom padding from the name container */
+    width: 100%; /* Full width of their parent element */
+    padding: 0 20px;
+}
+
+.name-and-links h1 {
+    margin-bottom: 5px; /* Minimalistic margin to keep tight spacing */
+}
+
+.social-links {
+    margin-top: 0; /* Removes top margin */
+    padding-top: 0; /* Eliminates padding to reduce space */
+}
+
+.social-links a {
+    margin: 0 10px; /* Keeps horizontal spacing between icons */
+    color: #333; /* Icon color */
+    font-size: 24px; /* Icon size */
+    text-decoration: none; /* Removes underline/underscore */
+}
+
+.social-links a:hover {
+    color: #555; /* Changes icon color on hover for visual feedback */
+    text-decoration: none; /* Ensure underline doesn't appear on hover either */
+}
+
+hr {
+    border: none;         /* Removes default border styles */
+    height: 1px;          /* Sets the height of the HR line */
+    background-color: rgb(0, 0, 0); /* Makes the HR line solid white */
+    margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
+}
