@@ -6,5 +6,7 @@ Visit site here: https://ckessler2.github.io/
 
 Here's my method, in case it's useful:
 <ol>
-  <li>Create basic html + css site locally, following some tutorial <a href="[url](https://www.browserstack.com/guide/build-a-website-using-html-css)">(example)</a>. I use VS code with the live server extension to preview the site from local files</li>
+  <li>Create repository for personal site with GitHub pages (https://pages.github.com/)</li>
+  <li>Using GitHub Desktop (or otherwise), clone the repo to your local machine</li> 
+  <li>Build on the basic html code and add css formatting, following some tutorial (https://www.browserstack.com/guide/build-a-website-using-html-css). I use VS code with the live server extension to preview the site from local files</li>
 </ol>
