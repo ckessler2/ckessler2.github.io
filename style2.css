@@ -32,6 +32,12 @@ body {
     min-height: 50vh; /* Optional: Ensure the body covers at least the whole viewport height */
     color:white;
     align-items: center;
+
+    display: flex;
+    flex-direction: column;  /* Stacks children vertically */
+    align-items: center;     /* Horizontally centers them */
+    justify-content: center; /* Optional: Vertically centers all content of the body */
+    min-height: 100vh;   
 }
 
 
@@ -81,6 +87,7 @@ header {
 
 .name-and-links h1 {
     margin-bottom: 5px; /* Minimalistic margin to keep tight spacing */
+    text-align: center;
 }
 
 .social-links {
@@ -162,7 +169,8 @@ a {
     }
 
     .photo-grid {
-        grid-template-columns: 1fr
+        grid-template-columns: 1fr;
+        
     }
 
 }
@@ -172,7 +180,7 @@ a {
     grid-template-columns: repeat(auto-fill, minmax(300px));
     grid-gap: 20px; /* Space between each photo */
     padding: 20px;
-    margin-top: 20px;
+    margin-top: 00px;
 }
 
 .photo-grid img {
