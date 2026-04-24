@@ -3,10 +3,11 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica,
     Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
     text-transform: none;
+    text-align: justify;
     padding: 20px;
     width: 100%;  /* Set this to the desired width based on your A4 calculation */
     max-width: 800px;
-    margin: 30px auto;
+    margin: 20px auto;
     box-sizing: border-box;
 
     background-image: url('figures/background.jpg'); /* Sets the background image */
@@ -21,8 +22,8 @@ body {
     position: relative;  /* Base positioning for absolute children */
     width: 100%;
     max-width: 700px;
-    /* margin: 20px auto; */
-    padding: 20px;
+    margin-top: 30px;
+    padding: 1%;
     box-sizing: border-box;
     overflow: hidden;  /* Keeps the background layer within the container bounds */
 }
@@ -30,68 +31,46 @@ body {
 .background-layer {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(97, 97, 97, 0.02);
-    backdrop-filter: blur(8px) brightness(1);
-    /* transform: scale(1.2); */
-    transform-origin: center; /* Ensure the scaling expands from the center */
-
-    /* Adjusted Mask with increased range for scaled size */
-    -webkit-mask:
-        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
-    -webkit-mask-size: cover; /* Ensuring mask fully covers the scaled area */
-    -webkit-mask-position: center;
-    -webkit-mask-repeat: no-repeat;
-    -webkit-mask-composite: source-in;
-
-    mask:
-        linear-gradient(to top, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to bottom, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to left, transparent 1%, #fff 8% 92%, transparent 99%),
-        linear-gradient(to right, transparent 1%, #fff 8% 92%, transparent 99%);
-    mask-size: cover; /* Ensuring mask fully covers the scaled area */
-    mask-position: center;
-    mask-repeat: no-repeat;
-    mask-composite: intersect;
-
-    z-index: 1; 
-    
-    /* transform: scale(1.2); */
+    background-color: white;
+    z-index: 1;
 }
 
 .content-layer {
     position: relative; /* Ensures content is positioned above background */
-    z-index: 2;  /* Higher than background-layer */
-    padding: 40px;
-    margin-top: 20px;
-    margin-bottom: 20px;
+    z-index: 1;  /* Higher than background-layer */
+    padding: 20px;
     /* Ensure all content margins, padding are handled here */
+}
+
+.content-layer > *:first-child {
+    margin-top: 0;
 }
 
 
 
 .conference-proceeding {
-    display: flex;
-    align-items: flex-start; /* Aligns the items at the top */
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    grid-template-areas:
+        "image title"
+        "image text";
+    column-gap: 20px;
+    align-items: start;
 }
 
 .conference-proceeding .image {
-    width: 140px; /* Fixed width to your spec */
-    height: auto; /* Maintain aspect ratio */
-    margin-right: 20px; /* Space between image and text */
+    grid-area: image;
+    width: 140px;
+    height: auto;
+}
+
+.conference-proceeding .proc-title {
+    grid-area: title;
+    margin: 0;
 }
 
 .text-content {
-    flex: 1; /* Takes up the remaining horizontal space */
-    margin-top: -25px;
-}
-
-.conference-proceeding .image {
-    width: 140px;  /* Set the width to your desired size */
-    height: auto;  /* This ensures that the aspect ratio is maintained */
-    margin-right: 20px;
+    grid-area: text;
 }
 
 
@@ -164,4 +143,22 @@ hr {
     height: 1px;          /* Sets the height of the HR line */
     background-color: rgb(0, 0, 0); /* Makes the HR line solid white */
     margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
+}
+
+@media (max-width: 600px) {
+    body {
+        padding: 8px;
+        margin: 10px auto;
+    }
+    .content-layer {
+        padding: 16px;
+    }
+    .conference-proceeding {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .conference-proceeding .text-content p {
+        margin-top: 0;
+    }
 }
