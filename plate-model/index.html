@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plate Model</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel">
+        <h1>Plate Model Browser MVP</h1>
+        <div class="toolbar">
+          <button id="run-button" type="button">Run simulation</button>
+          <span>Change inputs, run, and compare against the Python reference.</span>
+        </div>
+        <p id="status" class="status"></p>
+      </section>
+
+      <section class="panel">
+        <h2>Inputs</h2>
+        <div id="inputs-grid" class="grid"></div>
+        <label class="field field-wide">
+          <span>Aerodynamic coefficients</span>
+          <input id="aeroCoeffs" type="text" />
+        </label>
+      </section>
+
+      <section class="panel">
+        <h2>Trajectory</h2>
+        <div id="trajectory-plot" class="plot"></div>
+      </section>
+
+      <section class="panel">
+        <h2>States vs Time</h2>
+        <div id="state-plot" class="plot"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Final State</h2>
+        <pre id="final-state" class="mono"></pre>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

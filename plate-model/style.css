@@ -1,0 +1,70 @@
+body {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  background: #f7f7f4;
+  color: #111;
+}
+
+.app {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.panel {
+  background: #fff;
+  border: 1px solid #ccc;
+  padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.toolbar button {
+  padding: 8px 12px;
+  border: 1px solid #222;
+  background: #eee;
+  cursor: pointer;
+  font: inherit;
+}
+
+.grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field-wide {
+  margin-top: 12px;
+}
+
+.field input {
+  padding: 6px 8px;
+  border: 1px solid #999;
+  font: inherit;
+}
+
+.plot {
+  width: 100%;
+  min-height: 480px;
+}
+
+.mono {
+  font-family: "Courier New", monospace;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.status {
+  min-height: 1.25rem;
+  margin: 12px 0 0;
+}
