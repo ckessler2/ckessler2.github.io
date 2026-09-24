@@ -426,13 +426,13 @@ body[data-theme="dark"] .nav-link.is-active {
 
 .field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(47px, 73px);
+  grid-template-columns: minmax(0, 1fr) minmax(62px, 88px);
   gap: 8px;
   align-items: center;
 }
 
 .section-block-wide-inputs .field {
-  grid-template-columns: minmax(0, 1fr) minmax(57px, 83px);
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 98px);
 }
 
 .field-wide {
@@ -642,6 +642,7 @@ body[data-theme="dark"] .field select {
 .equation-math {
   overflow-x: auto;
 }
+
 
 
 

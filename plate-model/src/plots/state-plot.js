@@ -160,6 +160,7 @@ export function renderStatePlot(target, result) {
         font: { size: fontSize },
       },
     },
-    { responsive: true, displayModeBar: false },
+    { responsive: true, displayModeBar: true },
   );
 }
+

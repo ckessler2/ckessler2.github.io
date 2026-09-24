@@ -154,6 +154,7 @@ export function renderTrajectoryPlot(target, result, visualization) {
         font: { size: fontSize },
       },
     },
-    { responsive: true, displayModeBar: false },
+    { responsive: true, displayModeBar: true },
   );
 }
+
