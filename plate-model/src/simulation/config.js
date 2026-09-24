@@ -9,12 +9,9 @@ export function readConfigFromForm(formState) {
 
   const config = {
     model: {
-      l: Number(formState.l),
-      m: Number(formState.m),
-      rho_f: Number(formState.rho_f),
-      a: Number(formState.a),
-      b: Number(formState.b),
-      s: Number(formState.s),
+      m_prime: Number(formState.m_prime),
+      gamma: Number(formState.gamma),
+      inertia: Number(formState.inertia),
     },
     initialConditions: {
       v_xp0: Number(formState.v_xp0),
@@ -42,6 +39,10 @@ export function readConfigFromForm(formState) {
 
   if (config.solver.dt <= 0 || config.solver.t_end <= 0) {
     throw new Error("dt and t_end must both be positive.");
+  }
+
+  if (config.model.m_prime <= 0 || config.model.gamma <= 0 || config.model.inertia <= 0) {
+    throw new Error("m_prime, gamma, and inertia must all be positive.");
   }
 
   return config;

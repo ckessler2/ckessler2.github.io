@@ -85,16 +85,11 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
 
 export function nondimFreelyFallingPlate(_t, state, config) {
   const [v_xp, v_yp, omega, theta] = state;
-  const { l, m, rho_f, a, b, s } = config.model;
+  const { m_prime, gamma, inertia } = config.model;
   const { coefficients, e_x } = config.aero;
   const C_R = coefficients[8];
 
-  const rho_s = m / (Math.PI * a * b);
-  const inertia = (m * (a ** 2 + b ** 2)) / (rho_f * l ** 4) + 1 / 32 + e_x ** 2;
-  const l_CM = e_x * l;
-  const m_prime = (4 * m) / (Math.PI * rho_f * l * l * s);
-  const gamma = rho_f / (rho_s - rho_f);
-  const alpha = Math.atan2(v_yp - omega * l_CM, v_xp);
+  const alpha = Math.atan2(v_yp - omega * e_x, v_xp);
 
   const { C_Lalpha, C_Dalpha, epsilon_alpha, C_D_pi_2 } =
     evaluateLiEtAlAerodynamics(alpha, coefficients);

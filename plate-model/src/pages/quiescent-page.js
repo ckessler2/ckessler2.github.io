@@ -59,9 +59,12 @@ function createFieldGrid(fields, values, inputMap, renderMath, options = {}) {
   return grid;
 }
 
-function createSectionBlock(titleText, contentNode, note = "") {
+function createSectionBlock(titleText, contentNode, note = "", className = "") {
   const block = document.createElement("div");
   block.className = "section-block";
+  if (className) {
+    block.classList.add(className);
+  }
 
   const heading = document.createElement("h3");
   heading.className = "section-heading";
@@ -198,8 +201,10 @@ export function renderQuiescentPage({ state, renderMath }) {
   inputsContent.className = "page-flow";
   inputsContent.append(
     createSectionBlock(
-      "Model values",
+      "Nondimensional parameters",
       createFieldGrid(modelFields, values, inputMap, renderMath, { onInput: scheduleAutoRun }),
+      "",
+      "section-block-wide-inputs",
     ),
     createSectionBlock(
       "Aerodynamic coefficients",
@@ -212,6 +217,8 @@ export function renderQuiescentPage({ state, renderMath }) {
       createFieldGrid(initialConditionFields, values, inputMap, renderMath, {
         onInput: scheduleAutoRun,
       }),
+      "",
+      "section-block-wide-inputs",
     ),
   );
 

@@ -5,7 +5,6 @@ export function renderGustPage() {
   const card = document.createElement("article");
   card.className = "page-card";
   card.innerHTML = `
-    <h2>Gust simulator</h2>
     <p>To be implemented ...</p>
   `;
 

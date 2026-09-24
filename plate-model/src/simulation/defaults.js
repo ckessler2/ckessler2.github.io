@@ -1,12 +1,9 @@
 export function createDefaultConfig() {
   return {
     model: {
-      l: 0.07,
-      m: 0.3175e-3,
-      rho_f: 1.225,
-      a: 0.03375,
-      b: 0.5e-3,
-      s: 0.1745,
+      m_prime: 0.385945736987252,
+      gamma: 0.257140013996219,
+      inertia: 0.0435486755093541,
     },
     initialConditions: {
       v_xp0: 0,
@@ -34,12 +31,9 @@ export function createDefaultConfig() {
 }
 
 export const modelFields = [
-  { name: "l", labelTex: "l" },
-  { name: "m", labelTex: "m" },
-  { name: "rho_f", labelTex: "\\rho_f" },
-  { name: "a", labelTex: "a" },
-  { name: "b", labelTex: "b" },
-  { name: "s", labelTex: "s" },
+  { name: "m_prime", labelTex: "m'" },
+  { name: "gamma", labelTex: "\\gamma" },
+  { name: "inertia", labelTex: "I" },
   { name: "e_x", labelTex: "e_x" },
 ];
 
@@ -56,12 +50,12 @@ export const aeroCoefficientFields = [
 ];
 
 export const initialConditionFields = [
-  { name: "v_xp0", labelTex: "v_{x'}(0)" },
-  { name: "v_yp0", labelTex: "v_{y'}(0)" },
-  { name: "omega0", labelTex: "\\omega(0)" },
-  { name: "theta0", labelTex: "\\theta(0)" },
-  { name: "x0", labelTex: "x(0)" },
-  { name: "y0", labelTex: "y(0)" },
+  { name: "v_xp0", labelTex: "v_{x'}" },
+  { name: "v_yp0", labelTex: "v_{y'}" },
+  { name: "omega0", labelTex: "\\omega" },
+  { name: "theta0", labelTex: "\\theta" },
+  { name: "x0", labelTex: "x" },
+  { name: "y0", labelTex: "y" },
 ];
 
 export const solverFields = [
@@ -70,3 +64,4 @@ export const solverFields = [
 ];
 
 export const solverOptions = [{ value: "rk4", label: "RK4" }];
+
