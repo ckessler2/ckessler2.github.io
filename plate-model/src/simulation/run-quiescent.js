@@ -1,5 +1,5 @@
 import { solveFixedStep } from "./solver-rk4.js";
-import { nondimFreelyFallingPlate } from "./model-quiescent.js";
+import { nondimFreelyFallingPlate } from "./nondim-falling-plate-quiescent.js";
 import { estimateResultMemoryBytes } from "./metrics.js";
 
 export function runQuiescentSimulation(config) {

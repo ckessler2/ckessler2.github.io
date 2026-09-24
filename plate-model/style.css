@@ -161,7 +161,7 @@ body[data-theme="dark"] .page-card {
 .site-subtitle {
   margin: 0;
   color: var(--muted);
-  max-width: 72ch;
+  max-width: 140ch;
 }
 
 .nav-row {
@@ -186,6 +186,10 @@ body[data-theme="dark"] .nav-link {
   background: var(--control-fill);
   border-color: transparent;
   color: var(--text);
+}
+
+.inline-link {
+  color: inherit;
 }
 
 body[data-theme="dark"] .nav-link.is-active {
@@ -579,4 +583,20 @@ body[data-theme="dark"] .field select {
 
 
 
+
+
+.equation-stack {
+  display: grid;
+  gap: 10px;
+}
+
+.equation-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-alt);
+}
+
+.equation-math {
+  overflow-x: auto;
+}
 

@@ -1,15 +1,10 @@
 import { renderNav } from "../components/nav.js";
-import { renderBackgroundPage } from "../pages/background-page.js";
 import { renderEquationsPage } from "../pages/equations-page.js";
 import { renderQuiescentPage } from "../pages/quiescent-page.js";
 import { renderGustPage } from "../pages/gust-page.js";
 import { renderMath } from "./math.js";
 
 const routes = {
-  background: {
-    label: "Background",
-    render: renderBackgroundPage,
-  },
   equations: {
     label: "Equations",
     render: renderEquationsPage,

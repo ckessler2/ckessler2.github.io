@@ -79,6 +79,40 @@ function createSectionBlock(titleText, contentNode, note = "") {
   return block;
 }
 
+function buildModelInfoSection() {
+  const wrapper = document.createElement("div");
+
+  const summary = document.createElement("p");
+  summary.textContent = "See ";
+
+  const summaryLink = document.createElement("a");
+  summaryLink.href = "https://www.siam.org/publications/siam-news/articles/the-unconventional-aerodynamics-of-paper-airplanes/";
+  summaryLink.textContent = "Li and Ristroph, 2022";
+  summaryLink.target = "_blank";
+  summaryLink.rel = "noreferrer";
+  summaryLink.className = "inline-link";
+
+  summary.append(summaryLink, " for a lay summary of this topic.");
+
+  const intro = document.createElement("p");
+  intro.textContent = "Introduced by ";
+
+  const sourceLink = document.createElement("a");
+  sourceLink.href = "https://doi.org/10.1017/jfm.2022.89";
+  sourceLink.textContent = "Li et al, 2022";
+  sourceLink.target = "_blank";
+  sourceLink.rel = "noreferrer";
+  sourceLink.className = "inline-link";
+
+  intro.append(
+    sourceLink,
+    ", this is a 2D quasi-steady aerodynamic model of thin plates with differing centre of mass (CoM) locations, capable of predicting fluttering, tumbling, bounding, gliding and diving.",
+  );
+
+  wrapper.append(summary, intro);
+  return wrapper;
+}
+
 function getAccordionOpen(state, key, fallback) {
   const accordionState = state.getState().accordionState ?? {};
   return accordionState[key] ?? fallback;
@@ -220,13 +254,20 @@ export function renderQuiescentPage({ state, renderMath }) {
   }
 
   accordionGroup.append(
-    buildAccordion(state, "quiescent-inputs", "Simulator setup", inputsContent, true),
-    buildAccordion(state, "quiescent-solver", "Simulator settings", solverContent, true),
+    buildAccordion(state, "quiescent-inputs", "Simulator setup", inputsContent, false),
+    buildAccordion(state, "quiescent-solver", "Simulator settings", solverContent, false),
     buildAccordion(
       state,
       "quiescent-visualisation",
       "Plotting settings",
       visualizationContent,
+      false,
+    ),
+    buildAccordion(
+      state,
+      "quiescent-what-is-this",
+      "What is this model?",
+      buildModelInfoSection(),
       false,
     ),
   );
