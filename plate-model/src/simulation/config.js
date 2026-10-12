@@ -3,6 +3,10 @@ export function readConfigFromForm(formState) {
     Number(formState[`c${index + 1}`]),
   );
 
+  if (coefficients.length !== 9) {
+    throw new Error("Exactly 9 aerodynamic coefficients are required (c1..c9).");
+  }
+
   if (coefficients.some(Number.isNaN)) {
     throw new Error("All aerodynamic coefficients must be numeric.");
   }

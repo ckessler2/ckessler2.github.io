@@ -80,18 +80,20 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
     epsilon_alpha = -l_CP_alpha_l4;
   }
 
-  return { C_Lalpha, C_Dalpha, epsilon_alpha, C_D_pi_2 };
+  return { C_Lalpha, C_Dalpha, epsilon_alpha };
 }
 
 export function nondimFreelyFallingPlate(_t, state, config) {
+  // State is [v_xp, v_yp, omega, theta, x, y]; x/y are kinematic outputs only.
   const [v_xp, v_yp, omega, theta] = state;
   const { m_prime, gamma, inertia } = config.model;
   const { coefficients, e_x } = config.aero;
   const C_R = coefficients[8];
+  const C_D_pi_2 = coefficients[4];
 
   const alpha = Math.atan2(v_yp - omega * e_x, v_xp);
 
-  const { C_Lalpha, C_Dalpha, epsilon_alpha, C_D_pi_2 } =
+  const { C_Lalpha, C_Dalpha, epsilon_alpha } =
     evaluateLiEtAlAerodynamics(alpha, coefficients);
 
   const speed = Math.sqrt(v_xp ** 2 + (v_yp - omega * e_x) ** 2);
