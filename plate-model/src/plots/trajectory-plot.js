@@ -1,160 +1,284 @@
-function niceStep(span) {
-  if (span <= 6) {
-    return 1;
+import { renderMath } from "../app/math.js";
+
+function niceIntegerStep(minStep) {
+  const safeMinStep = Math.max(1, minStep);
+  const exponent = Math.floor(Math.log10(safeMinStep));
+  const base = 10 ** exponent;
+  const scaled = safeMinStep / base;
+
+  if (scaled <= 1) {
+    return base;
   }
-  if (span <= 12) {
-    return 2;
+  if (scaled <= 2) {
+    return 2 * base;
   }
-  if (span <= 30) {
-    return 5;
+  if (scaled <= 5) {
+    return 5 * base;
   }
-  if (span <= 60) {
-    return 10;
-  }
-  return 20;
+  return 10 * base;
 }
 
 function computeAxisBounds(values) {
   const finiteValues = values.filter((value) => Number.isFinite(value));
   if (!finiteValues.length) {
-    return { range: [-1, 1], dtick: 1 };
+    return { min: -1, max: 1, step: 1 };
+  }
+
+  const min = Math.floor(Math.min(...finiteValues));
+  let max = Math.ceil(Math.max(...finiteValues));
+
+  if (max === min) {
+    max = min + 1;
+  }
+
+  const span = max - min;
+  const targetTickCount = 7;
+  const minStep = Math.ceil(span / targetTickCount);
+  const step = niceIntegerStep(minStep);
+  const adjustedMax = min + Math.ceil(span / step) * step;
+
+  return {
+    min,
+    max: adjustedMax,
+    step,
+  };
+}
+
+function computeAxisBoundsStep5(values) {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (!finiteValues.length) {
+    return { min: -5, max: 5, step: 5 };
   }
 
   const rawMin = Math.min(...finiteValues);
   const rawMax = Math.max(...finiteValues);
-  const span = Math.max(rawMax - rawMin, 0.5);
-  const step = niceStep(span);
+  let min = 5 * Math.floor(rawMin / 5);
+  let max = 5 * Math.ceil(rawMax / 5);
 
-  const min = Math.floor(rawMin / step) * step;
-  const max = Math.ceil(rawMax / step) * step;
-  const adjustedMax = max === min ? min + step : max;
+  if (min === max) {
+    min -= 5;
+    max += 5;
+  }
 
-  return {
-    range: [min, adjustedMax],
-    dtick: step,
-  };
+  return { min, max, step: 5 };
+}
+
+function computeYAxisBoundsStep5(values) {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (!finiteValues.length) {
+    return { min: -5, max: 0, step: 5 };
+  }
+
+  const rawMin = Math.min(...finiteValues);
+  const rawMax = Math.max(...finiteValues);
+  const min = 5 * Math.floor(rawMin / 5);
+  let max = rawMax === 0 ? 0 : 5 * Math.ceil(rawMax / 5);
+
+  if (min === max) {
+    max += 5;
+  }
+
+  return { min, max, step: 5 };
 }
 
 function getPlotTheme() {
   const styles = getComputedStyle(document.body);
   return {
-    paperBg: styles.getPropertyValue("--plot-paper").trim(),
     plotBg: styles.getPropertyValue("--plot-bg").trim(),
     text: styles.getPropertyValue("--plot-text").trim(),
     axis: styles.getPropertyValue("--plot-axis").trim(),
     trajectory: styles.getPropertyValue("--plot-trajectory").trim(),
-    start: styles.getPropertyValue("--plot-start").trim(),
-    end: styles.getPropertyValue("--plot-end").trim(),
     fontFamily: styles.fontFamily,
     fontSize: parseFloat(styles.fontSize) || 14,
   };
 }
 
 function getPlotSize(target) {
-  const width = Math.max(target.clientWidth || 0, 240);
-  const height = Math.max(280, Math.min(500, Math.round(width * 0.72)));
-  return { width, height, compact: width < 520 };
+  const containerWidth = Math.max(target.clientWidth || 0, 240);
+  const leftAxis = 56;
+  const rightAxis = 16;
+  const topAxis = 16;
+  const bottomAxis = 56;
+  const innerSize = Math.max(220, Math.min(460, containerWidth - leftAxis - rightAxis));
+  const width = innerSize + leftAxis + rightAxis;
+  const height = innerSize + topAxis + bottomAxis;
+  return { width, height };
+}
+
+function enforceCappedAspect(xAxis, yAxis, maxExpandFactor = 1.5) {
+  const xCenter = (xAxis.min + xAxis.max) / 2;
+  const yCenter = (yAxis.min + yAxis.max) / 2;
+  const xSpan = xAxis.max - xAxis.min;
+  const ySpan = yAxis.max - yAxis.min;
+
+  let targetXSpan = xSpan;
+  let targetYSpan = ySpan;
+
+  if (ySpan > xSpan) {
+    targetXSpan = Math.min(ySpan, xSpan * maxExpandFactor);
+  } else if (xSpan > ySpan) {
+    targetYSpan = Math.min(xSpan, ySpan * maxExpandFactor);
+  }
+
+  const xHalf = targetXSpan / 2;
+  const yHalf = targetYSpan / 2;
+
+  const xMin = 5 * Math.floor((xCenter - xHalf) / 5);
+  const xMax = 5 * Math.ceil((xCenter + xHalf) / 5);
+  const yMin = 5 * Math.floor((yCenter - yHalf) / 5);
+  const yMax = 5 * Math.ceil((yCenter + yHalf) / 5);
+
+  return {
+    x: { min: xMin, max: xMax, step: 5 },
+    y: { min: yMin, max: yMax, step: 5 },
+  };
+}
+
+function buildTicks(bounds) {
+  const { min, max } = bounds;
+  let step = Math.max(1, bounds.step);
+  const maxTickTarget = 9;
+
+  function generateTicks(currentStep) {
+    const tickSet = new Set([min, max]);
+
+    const start = Math.ceil(min / currentStep) * currentStep;
+    const count = Math.max(0, Math.floor((max - start) / currentStep) + 1);
+    const cappedCount = Math.min(count, maxTickTarget + 2);
+
+    for (let index = 0; index < cappedCount; index += 1) {
+      tickSet.add(start + index * currentStep);
+    }
+
+    if (min <= 0 && 0 <= max) {
+      tickSet.add(0);
+    }
+
+    return Array.from(tickSet).sort((a, b) => a - b);
+  }
+
+  let ticks = generateTicks(step);
+  while (ticks.length > maxTickTarget) {
+    step *= 2;
+    ticks = generateTicks(step);
+  }
+
+  return ticks;
+}
+
+function drawAxisLimitBox(u, color) {
+  const { left, top, width, height } = u.bbox;
+  u.ctx.save();
+  u.ctx.strokeStyle = color;
+  u.ctx.lineWidth = 1;
+  u.ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
+  u.ctx.restore();
 }
 
 export function renderTrajectoryPlot(target, result, visualization) {
-  const { width, height, compact } = getPlotSize(target);
-  const xAxis = computeAxisBounds(result.states.x);
-  const yAxis = computeAxisBounds(result.states.y);
+  const uPlotLib = window.uPlot;
+  if (!uPlotLib) {
+    target.textContent = "uPlot not loaded.";
+    return;
+  }
+
+  target._uplot?.destroy();
+  target.replaceChildren();
+
+  const { width, height } = getPlotSize(target);
+  const rawXAxis = computeAxisBoundsStep5(result.states.x);
+  const rawYAxis = computeYAxisBoundsStep5(result.states.y);
+  const equalAxes = enforceCappedAspect(rawXAxis, rawYAxis);
+  const xAxis = equalAxes.x;
+  const yAxis = equalAxes.y;
+  const xTicks = buildTicks(xAxis);
+  const yTicks = buildTicks(yAxis);
   const theme = getPlotTheme();
-  const fontSize = compact ? Math.max(11, theme.fontSize - 1) : theme.fontSize;
-  const traces = [
-    {
-      x: result.states.x,
-      y: result.states.y,
-      type: "scatter",
-      mode: "lines",
-      name: "$x(t), y(t)$",
-      line: { color: theme.trajectory, width: 2 },
-    },
+  const axisColor = "#000";
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "plot-math-wrap";
+
+  const yLabel = document.createElement("div");
+  yLabel.className = "plot-math-y-axis math-label";
+  renderMath("y", yLabel, { inline: false });
+
+  const plotHost = document.createElement("div");
+  plotHost.className = "plot-uplot-host";
+
+  const xLabel = document.createElement("div");
+  xLabel.className = "plot-math-x-axis math-label";
+  renderMath("x", xLabel, { inline: false });
+
+  const data = [result.states.x, result.states.y];
+  const series = [
+    { label: "x", stroke: theme.axis },
+    { label: "trajectory", stroke: theme.trajectory, width: 2 },
   ];
 
-  if (visualization.showStartMarker) {
-    traces.push({
-      x: [result.states.x[0]],
-      y: [result.states.y[0]],
-      type: "scatter",
-      mode: "markers",
-      name: "$\\mathrm{start}$",
-      marker: { color: theme.start, size: 8 },
-    });
-  }
+  wrapper.append(yLabel, plotHost, xLabel);
+  target.append(wrapper);
 
-  if (visualization.showEndMarker) {
-    traces.push({
-      x: [result.states.x[result.states.x.length - 1]],
-      y: [result.states.y[result.states.y.length - 1]],
-      type: "scatter",
-      mode: "markers",
-      name: "$\\mathrm{end}$",
-      marker: { color: theme.end, size: 8 },
-    });
-  }
-
-  Plotly.newPlot(
-    target,
-    traces,
-    {
-      width,
-      height,
-      autosize: true,
-      paper_bgcolor: theme.paperBg,
-      plot_bgcolor: theme.plotBg,
-      font: {
-        family: theme.fontFamily,
-        size: fontSize,
-        color: theme.text,
-      },
-      xaxis: {
-        title: { text: "$x$", standoff: 10, font: { size: fontSize } },
-        range: xAxis.range,
-        dtick: xAxis.dtick,
-        showgrid: false,
-        zeroline: false,
-        showline: true,
-        linecolor: theme.axis,
-        linewidth: 1,
-        mirror: true,
-        ticks: "outside",
-        tickcolor: theme.axis,
-        tickfont: { size: fontSize },
-      },
-      yaxis: {
-        title: { text: "$y$", standoff: 10, font: { size: fontSize } },
-        range: yAxis.range,
-        dtick: yAxis.dtick,
-        scaleanchor: "x",
-        scaleratio: 1,
-        showgrid: false,
-        zeroline: false,
-        showline: true,
-        linecolor: theme.axis,
-        linewidth: 1,
-        mirror: true,
-        ticks: "outside",
-        tickcolor: theme.axis,
-        tickfont: { size: fontSize },
-      },
-      margin: {
-        l: compact ? 44 : 56,
-        r: compact ? 104 : 140,
-        t: 12,
-        b: compact ? 44 : 56,
-      },
-      legend: {
-        orientation: "v",
-        x: 1.06,
-        xanchor: "left",
-        y: 0.5,
-        yanchor: "middle",
-        font: { size: fontSize },
-      },
+  const opts = {
+    width,
+    height,
+    legend: { show: false },
+    scales: {
+      x: { min: xAxis.min, max: xAxis.max },
+      y: { min: yAxis.min, max: yAxis.max },
     },
-    { responsive: true, displayModeBar: true },
-  );
-}
+    axes: [
+      {
+        side: 2,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { stroke: axisColor },
+        size: 56,
+        gap: 6,
+        values: (_plot, splits) => splits.map((value) => `${value}`),
+        splits: () => xTicks,
+      },
+      {
+        side: 3,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { stroke: axisColor },
+        size: 56,
+        gap: 6,
+        values: (_plot, splits) => splits.map((value) => `${value}`),
+        splits: () => yTicks,
+      },
+      {
+        side: 0,
+        stroke: axisColor,
+        grid: { show: false },
+        size: 16,
+        ticks: { show: false },
+        values: () => [],
+      },
+      {
+        side: 1,
+        stroke: axisColor,
+        grid: { show: false },
+        size: 16,
+        ticks: { show: false },
+        values: () => [],
+      },
+    ],
+    series,
+    hooks: {
+      draw: [
+        (u) => {
+          drawAxisLimitBox(u, axisColor);
+        },
+      ],
+    },
+  };
 
+  plotHost.style.background = theme.plotBg;
+  plotHost.style.fontFamily = theme.fontFamily;
+  plotHost.style.fontSize = `${theme.fontSize}px`;
+  plotHost.style.color = theme.text;
+
+  target._uplot = new uPlotLib(opts, data, plotHost);
+}

@@ -34,6 +34,8 @@ export function readConfigFromForm(formState) {
       dt: Number(formState.dt),
       t_end: Number(formState.t_end),
       method: formState.solverMethod,
+      maxRuntimeMs: 1000,
+      maxAbsState: 1000000,
     },
     visualization: {
       showStartMarker: Boolean(formState.showStartMarker),

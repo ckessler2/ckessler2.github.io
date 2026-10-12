@@ -2,6 +2,14 @@ function addScaled(base, delta, scale) {
   return base.map((value, index) => value + delta[index] * scale);
 }
 
+function isFiniteState(state) {
+  return state.every((value) => Number.isFinite(value));
+}
+
+function exceedsMagnitude(state, limit) {
+  return state.some((value) => Math.abs(value) > limit);
+}
+
 function rk4Step(rhs, t, state, dt, config) {
   const k1 = rhs(t, state, config);
   const k2 = rhs(t + dt / 2, addScaled(state, k1, dt / 2), config);
@@ -15,6 +23,8 @@ function rk4Step(rhs, t, state, dt, config) {
 
 export function solveFixedStep({ rhs, config }) {
   const { dt, t_end } = config.solver;
+  const maxRuntimeMs = config.solver.maxRuntimeMs ?? Infinity;
+  const maxAbsState = config.solver.maxAbsState ?? Infinity;
   const stepCount = Math.floor(t_end / dt);
   const t = Array.from({ length: stepCount + 1 }, (_, index) => index * dt);
   const states = new Array(stepCount + 1);
@@ -31,7 +41,19 @@ export function solveFixedStep({ rhs, config }) {
 
   const startTime = performance.now();
   for (let index = 0; index < stepCount; index += 1) {
+    if (performance.now() - startTime > maxRuntimeMs) {
+      throw new Error(`Simulation exceeded ${maxRuntimeMs} ms runtime limit.`);
+    }
+
     states[index + 1] = rk4Step(rhs, t[index], states[index], dt, config);
+
+    const nextState = states[index + 1];
+    if (!isFiniteState(nextState)) {
+      throw new Error("Simulation diverged: non-finite state encountered.");
+    }
+    if (exceedsMagnitude(nextState, maxAbsState)) {
+      throw new Error(`Simulation diverged: state magnitude exceeded ${maxAbsState}.`);
+    }
   }
   const runtimeMs = performance.now() - startTime;
 

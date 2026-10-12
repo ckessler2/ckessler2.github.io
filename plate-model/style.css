@@ -552,6 +552,66 @@ body[data-theme="dark"] .field select {
   min-height: 280px;
 }
 
+.plot-math-wrap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+}
+
+.plot-uplot-host {
+  width: max-content;
+  display: inline-block;
+  line-height: 0;
+}
+
+.plot-uplot-host .uplot,
+.plot-uplot-host .uplot * {
+  font-family: inherit;
+  font-size: 1em;
+}
+
+.plot-math-y-axis {
+  justify-self: center;
+  writing-mode: vertical-rl;
+  transform: none;
+  line-height: 1;
+}
+
+.plot-math-x-axis {
+  grid-column: 2;
+  justify-self: center;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.plot-math-legend {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.plot-math-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.plot-math-swatch {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+}
+
+.plot-math-label {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
 .mono {
   margin: 0;
   white-space: pre-wrap;

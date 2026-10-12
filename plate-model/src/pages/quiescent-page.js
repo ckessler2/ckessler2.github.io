@@ -112,7 +112,10 @@ function buildModelInfoSection() {
     ", this is a 2D quasi-steady aerodynamic model of thin plates with differing centre of mass (CoM) locations, capable of predicting fluttering, tumbling, bounding, gliding and diving.",
   );
 
-  wrapper.append(summary, intro);
+  const siteSummary = document.createElement("p");
+  siteSummary.textContent = "This is a locally hosted JavaScript browser app that solves the model with a fixed-step RK4 solver, and formats plots and symbols using uPlot and MathJax.";
+
+  wrapper.append(summary, intro, siteSummary);
   return wrapper;
 }
 
@@ -132,6 +135,14 @@ function buildAccordion(state, key, title, content, fallbackOpen, options = {}) 
       options.onToggle?.(isOpen);
     },
   });
+}
+
+function formatRuntimeMs(runtimeMs) {
+  if (!Number.isFinite(runtimeMs) || runtimeMs <= 0) {
+    return "0";
+  }
+
+  return Number(runtimeMs).toPrecision(3);
 }
 
 export function renderQuiescentPage({ state, renderMath }) {
@@ -222,9 +233,6 @@ export function renderQuiescentPage({ state, renderMath }) {
     ),
   );
 
-  const solverContent = document.createElement("div");
-  solverContent.className = "page-flow";
-
   const solverGrid = createFieldGrid(solverFields, values, inputMap, renderMath, {
     onInput: scheduleAutoRun,
   });
@@ -239,41 +247,17 @@ export function renderQuiescentPage({ state, renderMath }) {
   inputMap.solverMethod = solverMethodField.input;
   solverMethodField.input.addEventListener("change", scheduleAutoRun);
   solverGrid.append(solverMethodField.wrapper);
-  solverContent.append(solverGrid);
 
-  const visualizationContent = document.createElement("div");
-  visualizationContent.className = "checkbox-row";
-  for (const [name, label] of [
-    ["showStartMarker", "Show start marker"],
-    ["showEndMarker", "Show end marker"],
-  ]) {
-    const row = document.createElement("label");
-    row.className = "checkbox";
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.checked = values[name];
-    box.addEventListener("change", scheduleAutoRun);
-    inputMap[name] = box;
-    const text = document.createElement("span");
-    text.textContent = label;
-    row.append(box, text);
-    visualizationContent.append(row);
-  }
+  inputsContent.append(
+    createSectionBlock("Solver settings", solverGrid),
+  );
 
   accordionGroup.append(
     buildAccordion(state, "quiescent-inputs", "Simulator setup", inputsContent, false),
-    buildAccordion(state, "quiescent-solver", "Simulator settings", solverContent, false),
-    buildAccordion(
-      state,
-      "quiescent-visualisation",
-      "Plotting settings",
-      visualizationContent,
-      false,
-    ),
     buildAccordion(
       state,
       "quiescent-what-is-this",
-      "What is this model?",
+      "What is this?",
       buildModelInfoSection(),
       false,
     ),
@@ -366,8 +350,14 @@ export function renderQuiescentPage({ state, renderMath }) {
       state.setConfig(nextConfig);
       state.setQuiescentResult(result);
       updatePlots(result, nextConfig);
-      status.textContent = `${result.metadata.stepCount.toLocaleString()} steps in ${result.metadata.runtimeMs.toFixed(2)} ms`;
+      status.textContent = `${result.metadata.stepCount.toLocaleString()} steps in ${formatRuntimeMs(result.metadata.runtimeMs)} ms`;
     } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.message.includes("runtime limit") || error.message.includes("diverged"))
+      ) {
+        autoRunToggle.checked = false;
+      }
       status.textContent =
         error instanceof Error ? error.message : "Unknown simulation error.";
     }
@@ -378,7 +368,7 @@ export function renderQuiescentPage({ state, renderMath }) {
   const existingResult = state.getState().quiescentResult;
   if (existingResult) {
     updatePlots(existingResult, config);
-    status.textContent = `${existingResult.metadata.stepCount.toLocaleString()} steps in ${existingResult.metadata.runtimeMs.toFixed(2)} ms`;
+    status.textContent = `${existingResult.metadata.stepCount.toLocaleString()} steps in ${formatRuntimeMs(existingResult.metadata.runtimeMs)} ms`;
   } else {
     execute();
   }

@@ -1,47 +1,52 @@
-function niceStep(span) {
-  if (span <= 1) {
-    return 0.2;
+import { renderMath } from "../app/math.js";
+
+function niceIntegerStep(minStep) {
+  const safeMinStep = Math.max(1, minStep);
+  const exponent = Math.floor(Math.log10(safeMinStep));
+  const base = 10 ** exponent;
+  const scaled = safeMinStep / base;
+
+  if (scaled <= 1) {
+    return base;
   }
-  if (span <= 3) {
-    return 0.5;
+  if (scaled <= 2) {
+    return 2 * base;
   }
-  if (span <= 8) {
-    return 1;
+  if (scaled <= 5) {
+    return 5 * base;
   }
-  if (span <= 20) {
-    return 2;
-  }
-  if (span <= 40) {
-    return 5;
-  }
-  return 10;
+  return 10 * base;
 }
 
 function computeAxisBounds(values) {
   const finiteValues = values.filter((value) => Number.isFinite(value));
   if (!finiteValues.length) {
-    return { range: [-1, 1], dtick: 1 };
+    return { min: -1, max: 1, step: 1 };
   }
 
-  const rawMin = Math.min(...finiteValues);
-  const rawMax = Math.max(...finiteValues);
-  const span = Math.max(rawMax - rawMin, 0.5);
-  const step = niceStep(span);
+  const min = Math.floor(Math.min(...finiteValues));
+  let max = Math.ceil(Math.max(...finiteValues));
 
-  const min = Math.floor(rawMin / step) * step;
-  const max = Math.ceil(rawMax / step) * step;
-  const adjustedMax = max === min ? min + step : max;
+  if (max === min) {
+    max = min + 1;
+  }
+
+  const span = max - min;
+  const targetTickCount = 7;
+  const minStep = Math.ceil(span / targetTickCount);
+  const step = niceIntegerStep(minStep);
+  const adjustedMax = min + Math.ceil(span / step) * step;
 
   return {
-    range: [min, adjustedMax],
-    dtick: step,
+    min,
+    max: adjustedMax,
+    step,
   };
 }
 
 function getPlotTheme() {
   const styles = getComputedStyle(document.body);
   return {
-    paperBg: styles.getPropertyValue("--plot-paper").trim(),
     plotBg: styles.getPropertyValue("--plot-bg").trim(),
     text: styles.getPropertyValue("--plot-text").trim(),
     axis: styles.getPropertyValue("--plot-axis").trim(),
@@ -55,13 +60,80 @@ function getPlotTheme() {
 }
 
 function getPlotSize(target) {
-  const width = Math.max(target.clientWidth || 0, 240);
-  const height = Math.max(250, Math.min(360, Math.round(width * 0.40)));
-  return { width, height, compact: width < 520 };
+  const width = Math.max((target.clientWidth || 0) - 96, 240);
+  const height = Math.max(250, Math.min(360, Math.round(width * 0.4)));
+  return { width, height };
+}
+
+function buildTicks(bounds) {
+  const { min, max } = bounds;
+  let step = Math.max(1, bounds.step);
+  const maxTickTarget = 9;
+
+  function generateTicks(currentStep) {
+    const tickSet = new Set([min, max]);
+
+    const start = Math.ceil(min / currentStep) * currentStep;
+    const count = Math.max(0, Math.floor((max - start) / currentStep) + 1);
+    const cappedCount = Math.min(count, maxTickTarget + 2);
+
+    for (let index = 0; index < cappedCount; index += 1) {
+      tickSet.add(start + index * currentStep);
+    }
+
+    if (min <= 0 && 0 <= max) {
+      tickSet.add(0);
+    }
+
+    return Array.from(tickSet).sort((a, b) => a - b);
+  }
+
+  let ticks = generateTicks(step);
+  while (ticks.length > maxTickTarget) {
+    step *= 2;
+    ticks = generateTicks(step);
+  }
+
+  return ticks;
+}
+
+function drawAxisLimitBox(u, color) {
+  const { left, top, width, height } = u.bbox;
+  u.ctx.save();
+  u.ctx.strokeStyle = color;
+  u.ctx.lineWidth = 1;
+  u.ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
+  u.ctx.restore();
+}
+
+function createLegendItem({ color, tex }) {
+  const item = document.createElement("div");
+  item.className = "plot-math-legend-item";
+
+  const swatch = document.createElement("span");
+  swatch.className = "plot-math-swatch";
+  swatch.style.background = color;
+
+  const label = document.createElement("span");
+  label.className = "plot-math-label math-label";
+  renderMath(tex, label);
+
+  item.append(swatch, label);
+  return item;
 }
 
 export function renderStatePlot(target, result) {
-  const { width, height, compact } = getPlotSize(target);
+  const uPlotLib = window.uPlot;
+  if (!uPlotLib) {
+    target.textContent = "uPlot not loaded.";
+    return;
+  }
+
+  target._uplot?.destroy();
+  target.replaceChildren();
+
+  const { width, height } = getPlotSize(target);
+  const xAxis = computeAxisBounds(result.t);
   const combinedValues = [
     ...result.states.v_xp,
     ...result.states.v_yp,
@@ -69,98 +141,107 @@ export function renderStatePlot(target, result) {
     ...result.states.theta,
   ];
   const yAxis = computeAxisBounds(combinedValues);
+  const xTicks = buildTicks(xAxis);
+  const yTicks = buildTicks(yAxis);
   const theme = getPlotTheme();
-  const fontSize = compact ? Math.max(11, theme.fontSize - 1) : theme.fontSize;
+  const axisColor = "#000";
 
-  Plotly.newPlot(
-    target,
-    [
+  const wrapper = document.createElement("div");
+  wrapper.className = "plot-math-wrap";
+
+  const yLabel = document.createElement("div");
+  yLabel.className = "plot-math-y-axis math-label";
+  renderMath("v_{x'},\\,v_{y'},\\,\\omega,\\,\\theta", yLabel, { inline: false });
+
+  const plotHost = document.createElement("div");
+  plotHost.className = "plot-uplot-host";
+
+  const xLabel = document.createElement("div");
+  xLabel.className = "plot-math-x-axis math-label";
+  renderMath("t", xLabel, { inline: false });
+
+  const legend = document.createElement("div");
+  legend.className = "plot-math-legend";
+  legend.append(
+    createLegendItem({ color: theme.vx, tex: "v_{x'}" }),
+    createLegendItem({ color: theme.vy, tex: "v_{y'}" }),
+    createLegendItem({ color: theme.omega, tex: "\\omega" }),
+    createLegendItem({ color: theme.theta, tex: "\\theta" }),
+  );
+
+  wrapper.append(yLabel, plotHost, xLabel, legend);
+  target.append(wrapper);
+
+  const opts = {
+    width,
+    height,
+    legend: { show: false },
+    scales: {
+      x: { min: xAxis.min, max: xAxis.max },
+      y: { min: yAxis.min, max: yAxis.max },
+    },
+    axes: [
       {
-        x: result.t,
-        y: result.states.v_xp,
-        type: "scatter",
-        mode: "lines",
-        name: "$v_{x'}$",
-        line: { width: 2, color: theme.vx },
+        side: 2,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { stroke: axisColor },
+        values: (_plot, splits) => splits.map((value) => `${value}`),
+        splits: () => xTicks,
       },
       {
-        x: result.t,
-        y: result.states.v_yp,
-        type: "scatter",
-        mode: "lines",
-        name: "$v_{y'}$",
-        line: { width: 2, color: theme.vy },
+        side: 3,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { stroke: axisColor },
+        values: (_plot, splits) => splits.map((value) => `${value}`),
+        splits: () => yTicks,
       },
       {
-        x: result.t,
-        y: result.states.omega,
-        type: "scatter",
-        mode: "lines",
-        name: "$\\omega$",
-        line: { width: 2, color: theme.omega },
+        side: 0,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { show: false },
+        values: () => [],
+        size: 14,
       },
       {
-        x: result.t,
-        y: result.states.theta,
-        type: "scatter",
-        mode: "lines",
-        name: "$\\theta$",
-        line: { width: 2, color: theme.theta },
+        side: 1,
+        stroke: axisColor,
+        grid: { show: false },
+        ticks: { show: false },
+        values: () => [],
+        size: 14,
       },
     ],
-    {
-      width,
-      height,
-      autosize: true,
-      paper_bgcolor: theme.paperBg,
-      plot_bgcolor: theme.plotBg,
-      font: {
-        family: theme.fontFamily,
-        size: fontSize,
-        color: theme.text,
-      },
-      xaxis: {
-        title: { text: "$t$", standoff: 10, font: { size: fontSize } },
-        showgrid: false,
-        zeroline: false,
-        showline: true,
-        linecolor: theme.axis,
-        linewidth: 1,
-        mirror: true,
-        ticks: "outside",
-        tickcolor: theme.axis,
-        tickfont: { size: fontSize },
-      },
-      yaxis: {
-        title: { text: "$v_{x'}, v_{y'}, \\omega, \\theta$", standoff: 10, font: { size: fontSize } },
-        range: yAxis.range,
-        dtick: yAxis.dtick,
-        showgrid: false,
-        zeroline: false,
-        showline: true,
-        linecolor: theme.axis,
-        linewidth: 1,
-        mirror: true,
-        ticks: "outside",
-        tickcolor: theme.axis,
-        tickfont: { size: fontSize },
-      },
-      margin: {
-        l: compact ? 44 : 52,
-        r: compact ? 104 : 148,
-        t: 12,
-        b: compact ? 44 : 52,
-      },
-      legend: {
-        orientation: "v",
-        x: 1.06,
-        xanchor: "left",
-        y: 0.5,
-        yanchor: "middle",
-        font: { size: fontSize },
-      },
+    series: [
+      { label: "t", stroke: theme.axis },
+      { label: "vx", stroke: theme.vx, width: 2 },
+      { label: "vy", stroke: theme.vy, width: 2 },
+      { label: "omega", stroke: theme.omega, width: 2 },
+      { label: "theta", stroke: theme.theta, width: 2 },
+    ],
+    hooks: {
+      draw: [
+        (u) => {
+          drawAxisLimitBox(u, axisColor);
+        },
+      ],
     },
-    { responsive: true, displayModeBar: true },
-  );
-}
+  };
 
+  plotHost.style.background = theme.plotBg;
+  plotHost.style.fontFamily = theme.fontFamily;
+  plotHost.style.fontSize = `${theme.fontSize}px`;
+  plotHost.style.color = theme.text;
+
+  const data = [
+    result.t,
+    result.states.v_xp,
+    result.states.v_yp,
+    result.states.omega,
+    result.states.theta,
+  ];
+
+  target._uplot = new uPlotLib(opts, data, plotHost);
+}

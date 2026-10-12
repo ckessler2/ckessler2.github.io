@@ -22,6 +22,8 @@ export function createDefaultConfig() {
       dt: 0.05,
       t_end: 25,
       method: "rk4",
+      maxRuntimeMs: 1000,
+      maxAbsState: 1000000,
     },
     visualization: {
       showStartMarker: true,

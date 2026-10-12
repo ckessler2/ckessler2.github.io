@@ -1,3 +1,7 @@
-Personal academic and photography site hosted with GitHub Pages, with photos hosted in repository (not sure if it's a good idea - but it's only 38 files totalling 12MB). Written with html + css since I'm not a web developer and this is a side project.
+Personal academic and photography site hosted with GitHub Pages, with photos hosted in repository.Written with html + css.
 
 Visit here: https://ckessler2.github.io/
+
+2D quasi-steady falling plate simulator, written in java. GUI for tuning nondimensional parameters, and visualizing trajectory and state-variable time histories.
+
+Visit here: https://ckessler2.github.io/plate-model/
