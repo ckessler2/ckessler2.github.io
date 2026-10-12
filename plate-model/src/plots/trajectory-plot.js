@@ -102,7 +102,7 @@ function getPlotSize(target) {
   const innerSize = Math.max(220, Math.min(460, containerWidth - leftAxis - rightAxis));
   const width = innerSize + leftAxis + rightAxis;
   const height = innerSize + topAxis + bottomAxis;
-  return { width, height };
+  return { width, height, leftAxis, rightAxis };
 }
 
 function enforceCappedAspect(xAxis, yAxis, maxExpandFactor = 1.5) {
@@ -185,7 +185,7 @@ export function renderTrajectoryPlot(target, result, visualization) {
   target._uplot?.destroy();
   target.replaceChildren();
 
-  const { width, height } = getPlotSize(target);
+  const { width, height, leftAxis, rightAxis } = getPlotSize(target);
   const rawXAxis = computeAxisBoundsStep5(result.states.x);
   const rawYAxis = computeYAxisBoundsStep5(result.states.y);
   const equalAxes = enforceCappedAspect(rawXAxis, rawYAxis);
@@ -198,6 +198,9 @@ export function renderTrajectoryPlot(target, result, visualization) {
 
   const wrapper = document.createElement("div");
   wrapper.className = "plot-math-wrap";
+  wrapper.style.gridTemplateColumns = "auto max-content";
+  wrapper.style.width = "max-content";
+  wrapper.style.margin = "0 auto";
 
   const yLabel = document.createElement("div");
   yLabel.className = "plot-math-y-axis math-label";
@@ -205,9 +208,11 @@ export function renderTrajectoryPlot(target, result, visualization) {
 
   const plotHost = document.createElement("div");
   plotHost.className = "plot-uplot-host";
+  plotHost.style.width = `${width}px`;
 
   const xLabel = document.createElement("div");
   xLabel.className = "plot-math-x-axis math-label";
+  xLabel.style.transform = `translateX(${(leftAxis - rightAxis) / 2}px)`;
   renderMath("x", xLabel, { inline: false });
 
   const data = [result.states.x, result.states.y];

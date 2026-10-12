@@ -60,7 +60,8 @@ function getPlotTheme() {
 }
 
 function getPlotSize(target) {
-  const width = Math.max((target.clientWidth || 0) - 96, 240);
+  const containerWidth = target.clientWidth || target.parentElement?.clientWidth || 0;
+  const width = Math.max(Math.floor(containerWidth) - 8, 220);
   const height = Math.max(250, Math.min(360, Math.round(width * 0.4)));
   return { width, height };
 }
@@ -155,6 +156,7 @@ export function renderStatePlot(target, result) {
 
   const plotHost = document.createElement("div");
   plotHost.className = "plot-uplot-host";
+  plotHost.style.marginLeft = "-10px";
 
   const xLabel = document.createElement("div");
   xLabel.className = "plot-math-x-axis math-label";
@@ -244,4 +246,16 @@ export function renderStatePlot(target, result) {
   ];
 
   target._uplot = new uPlotLib(opts, data, plotHost);
+
+  if (!target._statePlotResizeObserver) {
+    target._statePlotResizeObserver = new ResizeObserver(() => {
+      if (!target._uplot) {
+        return;
+      }
+
+      const { width: nextWidth, height: nextHeight } = getPlotSize(target);
+      target._uplot.setSize({ width: nextWidth, height: nextHeight });
+    });
+    target._statePlotResizeObserver.observe(target);
+  }
 }

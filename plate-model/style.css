@@ -560,9 +560,11 @@ body[data-theme="dark"] .field select {
 }
 
 .plot-uplot-host {
-  width: max-content;
-  display: inline-block;
+  width: 100%;
+  max-width: 100%;
+  display: block;
   line-height: 0;
+  overflow-x: hidden;
 }
 
 .plot-uplot-host .uplot,
@@ -656,13 +658,19 @@ body[data-theme="dark"] .field select {
 
 @media (max-width: 760px) {
   .site-title-row {
+    flex-direction: column;
     align-items: flex-start;
     gap: 10px;
-    padding-right: min(22vw, 90px);
+    padding-right: 0;
+  }
+
+  .site-title {
+    width: 60%;
   }
 
   .site-byline {
     font-size: 0.95rem;
+    white-space: normal;
   }
 
   .header-top {
