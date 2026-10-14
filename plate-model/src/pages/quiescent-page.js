@@ -109,13 +109,9 @@ function buildModelInfoSection() {
 
   intro.append(
     sourceLink,
-    ", this is a 2D quasi-steady aerodynamic model of thin plates with differing centre of mass (CoM) locations, capable of predicting fluttering, tumbling, bounding, gliding and diving.",
+    ", these equations predict 2D quasi-steady aerodynamic forces on free-falling thin plates with differing centre of mass (CoM) locations, and can predict fluttering, tumbling, bounding, gliding and diving. This JavaScript app solves the equations with a fixed-step fourth-order Runge–Kutta solver.",
   );
-
-  const siteSummary = document.createElement("p");
-  siteSummary.textContent = "This is a locally hosted JavaScript browser app that solves the model with a fixed-step RK4 solver, and formats plots and symbols using uPlot and MathJax.";
-
-  wrapper.append(summary, intro, siteSummary);
+  wrapper.append(summary, intro);
   return wrapper;
 }
 
