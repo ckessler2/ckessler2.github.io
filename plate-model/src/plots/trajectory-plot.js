@@ -207,18 +207,23 @@ export function renderTrajectoryPlot(target, result, visualization) {
   xLabel.style.transform = `translateX(${(leftAxis - rightAxis) / 2}px)`;
   renderMath("x", xLabel, { inline: false });
 
+  const coordReadout = document.createElement("div");
+  coordReadout.className = "plot-coord-readout";
+  coordReadout.textContent = "x: -, y: -";
+
   const data = [result.states.x, result.states.y];
   const series = [
     { label: "x", stroke: theme.axis },
     { label: "trajectory", stroke: theme.trajectory, width: 2 },
   ];
 
-  wrapper.append(yLabel, plotHost, xLabel);
+  wrapper.append(yLabel, plotHost, xLabel, coordReadout);
   target.append(wrapper);
 
   const opts = {
     width,
     height,
+    pxAlign: false,
     legend: { show: false },
     scales: {
       x: { min: xAxis.min, max: xAxis.max },
@@ -264,6 +269,19 @@ export function renderTrajectoryPlot(target, result, visualization) {
     ],
     series,
     hooks: {
+      setCursor: [
+        (u) => {
+          const idx = u.cursor.idx;
+          if (idx == null || idx < 0) {
+            coordReadout.textContent = "x: -, y: -";
+            return;
+          }
+
+          const xValue = u.data[0][idx];
+          const yValue = u.data[1][idx];
+          coordReadout.textContent = `x: ${Number(xValue).toFixed(4)}, y: ${Number(yValue).toFixed(4)}`;
+        },
+      ],
       draw: [
         (u) => {
           drawAxisLimitBox(u, axisColor);

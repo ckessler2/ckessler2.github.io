@@ -3,7 +3,7 @@ export function createDefaultConfig() {
     model: {
       m_prime: 0.437607764772948,
       gamma: 0.220499600429808,
-      inertia:0.046836294826135,
+      inertia:0.013986294826135,
     },
     initialConditions: {
       v_xp0: 2.2,
@@ -16,7 +16,9 @@ export function createDefaultConfig() {
     aero: {
       type: "li_et_al_coefficients",
       coefficients: [5.182184521,	0.807506507,	0.105977518,	4.936811621,	1.499580107,	0.238565281,	2.852890077,	0.368933365,	1.730018894],
-      e_x: 0.04,
+      
+      
+      e_x: 0.0,
     },
     solver: {
       dt: 0.1,
@@ -40,14 +42,14 @@ export const modelFields = [
 ];
 
 export const aeroCoefficientFields = [
-  { name: "c1", labelTex: "C_{\\mathrm{CP}}^{0}" },
-  { name: "c2", labelTex: "C_{\\mathrm{CP}}^{1}" },
-  { name: "c3", labelTex: "C_{\\mathrm{CP}}^{2}" },
-  { name: "c4", labelTex: "C_{\\mathrm{L}}^{1}" },
-  { name: "c5", labelTex: "C_{\\mathrm{L}}^{2}" },
-  { name: "c6", labelTex: "C_{\\mathrm{D}}^{0}" },
-  { name: "c7", labelTex: "C_{\\mathrm{D}}^{1}" },
-  { name: "c8", labelTex: "C_{\\mathrm{D}}^{\\pi/2}" },
+  { name: "c1", labelTex: "C_{\\mathrm{L}}^{1}" },
+  { name: "c2", labelTex: "C_{\\mathrm{L}}^{2}" },
+  { name: "c3", labelTex: "C_{\\mathrm{D}}^{0}" },
+  { name: "c4", labelTex: "C_{\\mathrm{D}}^{1}" },
+  { name: "c5", labelTex: "C_{\\mathrm{D}}^{\\pi/2}" },
+  { name: "c6", labelTex: "C_{\\mathrm{CP}}^{0}" },
+  { name: "c7", labelTex: "C_{\\mathrm{CP}}^{1}" },
+  { name: "c8", labelTex: "C_{\\mathrm{CP}}^{2}" },
   { name: "c9", labelTex: "C_{\\mathrm{R}}" },
 ];
 

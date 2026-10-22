@@ -102,6 +102,7 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   const l = config.model.plateLength ?? 0.07;
   const l_CM = e_x * l;
 
+  // Nondimensional angle-of-attack relation from the reduced equations.
   const alpha = Math.atan2(v_yp - omega * l_CM, v_xp);
 
   // Evaluate aerodynamic coefficients and center-of-pressure offset
@@ -125,6 +126,7 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   const e_xplus = (2 * e_x + 1) ** 4 + (2 * e_x - 1) ** 4;
   const e_xminus = (2 * e_x + 1) ** 4 - (2 * e_x - 1) ** 4;
   const plusMinus = 2 * e_x <= 1 ? e_xplus + e_xminus : e_xplus - e_xminus;
+  const inertiaTotal = inertia + 1 / 32 + e_x ** 2;
 
   // Assemble angular and translational ODEs (nondimensional form),
   // then convert body-frame velocity to lab-frame position rates.
@@ -132,7 +134,7 @@ export function nondimFreelyFallingPlate(_t, state, config) {
     (-(C_D_pi_2 / (32 * Math.PI)) * omega * Math.abs(omega) * plusMinus +
       (L_Ty + D_y) * (epsilon_alpha - e_x) -
       gamma * e_x * Math.cos(theta)) /
-    inertia;
+    inertiaTotal;
 
   const dv_xpdt =
     ((m_prime + 1) * omega * v_yp - e_x * omega ** 2 + (L_Tx + L_Rx) + D_x - Math.sin(theta)) /

@@ -602,6 +602,15 @@ body[data-theme="dark"] .field select {
   margin-top: 8px;
 }
 
+.plot-coord-readout {
+  grid-column: 2;
+  justify-self: center;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  color: var(--muted);
+}
+
 .plot-math-legend-item {
   display: inline-flex;
   align-items: center;

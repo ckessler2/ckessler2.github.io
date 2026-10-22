@@ -181,6 +181,7 @@ export function renderStatePlot(target, result) {
   const opts = {
     width,
     height,
+    pxAlign: false,
     legend: { show: false },
     scales: {
       x: { min: xAxis.min, max: xAxis.max },
