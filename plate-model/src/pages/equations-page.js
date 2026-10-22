@@ -6,29 +6,35 @@ function escapeHtml(text) {
 }
 
 function highlightJs(source) {
-  let html = escapeHtml(source);
+  const tokenPattern =
+    /(\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b(?:import|from|export|function|return|const|let|if|else)\b|\b(?:Math|Number|Array|Object|Boolean)\b|\b\d+(?:\.\d+)?(?:e-?\d+)?\b)/g;
 
-  html = html.replace(
-    /(\/\/.*$)/gm,
-    '<span class="code-comment">$1</span>',
-  );
-  html = html.replace(
-    /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g,
-    '<span class="code-string">$1</span>',
-  );
-  html = html.replace(
-    /\b(import|from|export|function|return|const|let|if|else)\b/g,
-    '<span class="code-keyword">$1</span>',
-  );
-  html = html.replace(
-    /\b(Math|Number)\b/g,
-    '<span class="code-builtin">$1</span>',
-  );
-  html = html.replace(
-    /\b(\d+(?:\.\d+)?(?:e-?\d+)?)\b/gi,
-    '<span class="code-number">$1</span>',
-  );
+  let html = "";
+  let lastIndex = 0;
 
+  for (const match of source.matchAll(tokenPattern)) {
+    const [token] = match;
+    const start = match.index ?? 0;
+    html += escapeHtml(source.slice(lastIndex, start));
+
+    let className = "";
+    if (token.startsWith("//")) {
+      className = "code-comment";
+    } else if (token.startsWith('"') || token.startsWith("'")) {
+      className = "code-string";
+    } else if (/^(import|from|export|function|return|const|let|if|else)$/.test(token)) {
+      className = "code-keyword";
+    } else if (/^(Math|Number|Array|Object|Boolean)$/.test(token)) {
+      className = "code-builtin";
+    } else {
+      className = "code-number";
+    }
+
+    html += `<span class="${className}">${escapeHtml(token)}</span>`;
+    lastIndex = start + token.length;
+  }
+
+  html += escapeHtml(source.slice(lastIndex));
   return html;
 }
 
@@ -225,13 +231,36 @@ export function runQuiescentSimulation(config) {
   return result;
 }`;
 
+async function loadSourceFile(path, fallback) {
+  try {
+    const response = await fetch(path, { cache: "no-store" });
+    if (!response.ok) {
+      return fallback;
+    }
+    return await response.text();
+  } catch (_error) {
+    return fallback;
+  }
+}
+
 export function renderEquationsPage() {
   const page = document.createElement("section");
   page.className = "page-flow";
 
-  page.append(
-    createCodeCard("nondim-falling-plate-quiescent.js", modelSource),
-    createCodeCard("run-quiescent.js", runnerSource),
-  );
+  const loadingCard = document.createElement("section");
+  loadingCard.className = "page-card";
+  loadingCard.textContent = "Loading source files...";
+  page.append(loadingCard);
+
+  Promise.all([
+    loadSourceFile("./src/simulation/nondim-falling-plate-quiescent.js", modelSource),
+    loadSourceFile("./src/simulation/run-quiescent.js", runnerSource),
+  ]).then(([liveModelSource, liveRunnerSource]) => {
+    page.replaceChildren(
+      createCodeCard("nondim-falling-plate-quiescent.js", liveModelSource),
+      createCodeCard("run-quiescent.js", liveRunnerSource),
+    );
+  });
+
   return page;
 }

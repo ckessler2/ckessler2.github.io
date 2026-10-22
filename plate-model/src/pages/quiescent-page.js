@@ -3,6 +3,8 @@ import { createField } from "../components/field.js";
 import { createPlotSection } from "../components/plot-section.js";
 import { createStatsPanel } from "../components/stats-panel.js";
 import { readConfigFromForm } from "../simulation/config.js";
+import { exportQuiescentResultCsv } from "../export/export-quiescent-csv.js";
+import { exportQuiescentTrajectorySvg } from "../export/export-xy-svg.js";
 import {
   aeroCoefficientFields,
   createDefaultConfig,
@@ -248,8 +250,53 @@ export function renderQuiescentPage({ state, renderMath }) {
     createSectionBlock("Solver settings", solverGrid),
   );
 
+  const exportContent = document.createElement("div");
+  exportContent.className = "page-flow";
+
+  const csvFilenameField = createField({
+    name: "csvFilename",
+    label: "CSV filename",
+    value: "plate-model-quiescent.csv",
+    type: "text",
+  });
+  csvFilenameField.wrapper.classList.add("export-filename-field");
+
+  const exportCsvButton = document.createElement("button");
+  exportCsvButton.className = "header-action-button";
+  exportCsvButton.type = "button";
+  exportCsvButton.textContent = "Export .csv";
+  exportCsvButton.addEventListener("click", () => {
+    const latestState = state.getState();
+    exportQuiescentResultCsv(latestState.quiescentResult, csvFilenameField.input.value);
+  });
+
+  const svgFilenameField = createField({
+    name: "svgFilename",
+    label: "SVG filename",
+    value: "plate-model-trajectory-xy.svg",
+    type: "text",
+  });
+  svgFilenameField.wrapper.classList.add("export-filename-field");
+
+  const exportSvgButton = document.createElement("button");
+  exportSvgButton.className = "header-action-button";
+  exportSvgButton.type = "button";
+  exportSvgButton.textContent = "Export XY svg";
+  exportSvgButton.addEventListener("click", () => {
+    const latestState = state.getState();
+    exportQuiescentTrajectorySvg(latestState.quiescentResult, svgFilenameField.input.value);
+  });
+
+  exportContent.append(
+    csvFilenameField.wrapper,
+    exportCsvButton,
+    svgFilenameField.wrapper,
+    exportSvgButton,
+  );
+
   accordionGroup.append(
     buildAccordion(state, "quiescent-inputs", "Simulator setup", inputsContent, false),
+    buildAccordion(state, "quiescent-exports", "Export results", exportContent, false),
     buildAccordion(
       state,
       "quiescent-what-is-this",

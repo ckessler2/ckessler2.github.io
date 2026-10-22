@@ -4,41 +4,6 @@ import { renderQuiescentPage } from "../pages/quiescent-page.js";
 import { renderGustPage } from "../pages/gust-page.js";
 import { renderMath } from "./math.js";
 
-function exportQuiescentResult(result) {
-  if (!result) {
-    return;
-  }
-
-  const headers = ["t", "v_xp", "v_yp", "omega", "theta", "x", "y"];
-  const rows = result.t.map((time, index) => [
-    time,
-    result.states.v_xp[index],
-    result.states.v_yp[index],
-    result.states.omega[index],
-    result.states.theta[index],
-    result.states.x[index],
-    result.states.y[index],
-  ]);
-
-  const content = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "plate-model-quiescent.csv";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.dispatchEvent(new MouseEvent("click", {
-    bubbles: true,
-    cancelable: true,
-    view: window,
-  }));
-  window.setTimeout(() => {
-    URL.revokeObjectURL(url);
-    link.remove();
-  }, 1000);
-}
-
 const routes = {
   equations: {
     label: "Equations",
@@ -79,9 +44,6 @@ export function createRouter(root, state) {
     const toggles = document.createElement("div");
     toggles.className = "header-toggle-stack";
 
-    const headerActions = document.createElement("div");
-    headerActions.className = "header-action-stack";
-
     const fontToggle = document.createElement("label");
     fontToggle.className = "checkbox header-toggle";
 
@@ -115,17 +77,7 @@ export function createRouter(root, state) {
     themeToggle.append(themeToggleText, themeToggleInput);
     toggles.append(fontToggle, themeToggle);
 
-    const exportButton = document.createElement("button");
-    exportButton.className = "header-action-button";
-    exportButton.type = "button";
-    exportButton.textContent = "Export .csv";
-    exportButton.addEventListener("click", () => {
-      const latestState = state.getState();
-      exportQuiescentResult(latestState.quiescentResult);
-    });
-
-    headerActions.append(exportButton);
-    headerTop.append(toggles, headerActions);
+    headerTop.append(toggles);
 
     const titleRow = document.createElement("div");
     titleRow.className = "site-title-row";

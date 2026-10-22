@@ -1,4 +1,6 @@
 function evaluateLiEtAlAerodynamics(alpha, coefficients) {
+  // Unpack the quasi-steady fit parameters from Li et al.:
+  // lift, drag, and center-of-pressure terms used across all angle regimes.
   const [C_L1, C_L2, C_D0, C_D1, C_D_pi_2, C_0_CP, C_1_CP, C_2_CP] = coefficients;
 
   const alpha0 = (14 * Math.PI) / 180;
@@ -9,6 +11,8 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
   const Falpha3 = (1 - Math.tanh((alpha - alpha0) / delta)) / 2;
   const Falpha4 = (1 - Math.tanh((Math.PI - alpha - alpha0) / delta)) / 2;
 
+  // Build blended lift expressions for the four angular sectors.
+  // The tanh switches smooth transitions near stall/separation thresholds.
   const C_Lalpha1 =
     Falpha1 * C_L1 * Math.sin(Math.PI - Math.abs(alpha)) +
     (1 - Falpha1) * C_L2 * Math.sin(2 * (Math.PI - Math.abs(alpha)));
@@ -22,6 +26,7 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
     (1 - Falpha4) * C_L2 * Math.sin(2 * (Math.PI - alpha));
 
   let C_Lalpha;
+  // Choose signed lift coefficient for the active alpha quadrant.
   if (-Math.PI <= alpha && alpha <= -Math.PI / 2) {
     C_Lalpha = C_Lalpha1;
   } else if (-Math.PI / 2 < alpha && alpha <= 0) {
@@ -46,6 +51,7 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
     (1 - Falpha4) * C_D_pi_2 * Math.sin(Math.PI - alpha) ** 2;
 
   let C_Dalpha;
+  // Choose drag expression for the active alpha quadrant.
   if (-Math.PI <= alpha && alpha < -Math.PI / 2) {
     C_Dalpha = C_Dalpha1;
   } else if (-Math.PI / 2 <= alpha && alpha < 0) {
@@ -69,6 +75,8 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
     Falpha4 * (C_0_CP - C_1_CP * (Math.PI - alpha) ** 2) +
     (1 - Falpha4) * C_2_CP * (1 - (Math.PI - alpha) / (Math.PI / 2));
 
+  // Convert center-of-pressure distance into signed aerodynamic torque arm.
+  // Sign changes are matched to the same angular sectors as lift/drag.
   let epsilon_alpha;
   if (-Math.PI <= alpha && alpha <= -Math.PI / 2) {
     epsilon_alpha = -l_CP_alpha_l1;
@@ -85,17 +93,24 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
 
 export function nondimFreelyFallingPlate(_t, state, config) {
   // State is [v_xp, v_yp, omega, theta, x, y]; x/y are kinematic outputs only.
+  // Pull model and aerodynamic parameters once per RHS evaluation.
   const [v_xp, v_yp, omega, theta] = state;
   const { m_prime, gamma, inertia } = config.model;
   const { coefficients, e_x } = config.aero;
   const C_R = coefficients[8];
   const C_D_pi_2 = coefficients[4];
+  const l = config.model.plateLength ?? 0.07;
+  const l_CM = e_x * l;
 
-  const alpha = Math.atan2(v_yp - omega * e_x, v_xp);
+  const alpha = Math.atan2(v_yp - omega * l_CM, v_xp);
 
+  // Evaluate aerodynamic coefficients and center-of-pressure offset
+  // for the current instantaneous angle of attack.
   const { C_Lalpha, C_Dalpha, epsilon_alpha } =
     evaluateLiEtAlAerodynamics(alpha, coefficients);
 
+  // Resolve translational lift/drag and rotational lift-like damping
+  // into body-frame x' and y' components.
   const speed = Math.sqrt(v_xp ** 2 + (v_yp - omega * e_x) ** 2);
   const L_Txy = (2 / Math.PI) * C_Lalpha * speed;
   const L_Tx = L_Txy * (v_yp - omega * e_x);
@@ -111,6 +126,8 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   const e_xminus = (2 * e_x + 1) ** 4 - (2 * e_x - 1) ** 4;
   const plusMinus = 2 * e_x <= 1 ? e_xplus + e_xminus : e_xplus - e_xminus;
 
+  // Assemble angular and translational ODEs (nondimensional form),
+  // then convert body-frame velocity to lab-frame position rates.
   const domegadt =
     (-(C_D_pi_2 / (32 * Math.PI)) * omega * Math.abs(omega) * plusMinus +
       (L_Ty + D_y) * (epsilon_alpha - e_x) -
@@ -129,5 +146,6 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   const dx_dt = v_xp * Math.cos(theta) - v_yp * Math.sin(theta);
   const dy_dt = v_xp * Math.sin(theta) + v_yp * Math.cos(theta);
 
+  // Return derivatives in the same state ordering as the solver expects.
   return [dv_xpdt, dv_ypdt, domegadt, dthetadt, dx_dt, dy_dt];
 }

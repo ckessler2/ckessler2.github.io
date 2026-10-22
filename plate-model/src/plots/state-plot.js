@@ -61,7 +61,7 @@ function getPlotTheme() {
 
 function getPlotSize(target) {
   const containerWidth = target.clientWidth || target.parentElement?.clientWidth || 0;
-  const width = Math.max(Math.floor(containerWidth) - 8, 220);
+  const width = Math.max(Math.floor((containerWidth - 8) * 0.85), 220);
   const height = Math.max(250, Math.min(360, Math.round(width * 0.4)));
   return { width, height };
 }
@@ -152,11 +152,15 @@ export function renderStatePlot(target, result) {
 
   const yLabel = document.createElement("div");
   yLabel.className = "plot-math-y-axis math-label";
+  yLabel.style.position = "relative";
+  yLabel.style.zIndex = "2";
   renderMath("v_{x'},\\,v_{y'},\\,\\omega,\\,\\theta", yLabel, { inline: false });
 
   const plotHost = document.createElement("div");
   plotHost.className = "plot-uplot-host";
   plotHost.style.marginLeft = "-10px";
+  plotHost.style.position = "relative";
+  plotHost.style.zIndex = "1";
 
   const xLabel = document.createElement("div");
   xLabel.className = "plot-math-x-axis math-label";

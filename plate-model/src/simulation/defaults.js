@@ -1,26 +1,26 @@
 export function createDefaultConfig() {
   return {
     model: {
-      m_prime: 0.385945736987252,
-      gamma: 0.257140013996219,
-      inertia: 0.0435486755093541,
+      m_prime: 0.437607764772948,
+      gamma: 0.220499600429808,
+      inertia:0.046836294826135,
     },
     initialConditions: {
-      v_xp0: 0,
+      v_xp0: 2.2,
       v_yp0: 0,
       omega0: 0,
-      theta0: -1,
+      theta0: -0.2,
       x0: 0,
       y0: 0,
     },
     aero: {
       type: "li_et_al_coefficients",
-      coefficients: [5.182, 0.8075, 0.106, 4.937, 1.5, 0.2386, 2.853, 0.3689, 1.73],
-      e_x: 0,
+      coefficients: [5.182184521,	0.807506507,	0.105977518,	4.936811621,	1.499580107,	0.238565281,	2.852890077,	0.368933365,	1.730018894],
+      e_x: 0.04,
     },
     solver: {
-      dt: 0.05,
-      t_end: 25,
+      dt: 0.1,
+      t_end: 50,
       method: "rk4",
       maxRuntimeMs: 1000,
       maxAbsState: 1000000,

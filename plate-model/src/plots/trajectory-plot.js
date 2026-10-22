@@ -105,28 +105,20 @@ function getPlotSize(target) {
   return { width, height, leftAxis, rightAxis };
 }
 
-function enforceCappedAspect(xAxis, yAxis, maxExpandFactor = 1.5) {
+function enforceEqualAspect(xAxis, yAxis) {
   const xCenter = (xAxis.min + xAxis.max) / 2;
   const yCenter = (yAxis.min + yAxis.max) / 2;
   const xSpan = xAxis.max - xAxis.min;
   const ySpan = yAxis.max - yAxis.min;
 
-  let targetXSpan = xSpan;
-  let targetYSpan = ySpan;
+  // Enforce identical data spans on x and y so one unit in x equals one unit in y.
+  const targetSpan = 5 * Math.ceil(Math.max(xSpan, ySpan) / 5);
+  const halfSpan = targetSpan / 2;
 
-  if (ySpan > xSpan) {
-    targetXSpan = Math.min(ySpan, xSpan * maxExpandFactor);
-  } else if (xSpan > ySpan) {
-    targetYSpan = Math.min(xSpan, ySpan * maxExpandFactor);
-  }
-
-  const xHalf = targetXSpan / 2;
-  const yHalf = targetYSpan / 2;
-
-  const xMin = 5 * Math.floor((xCenter - xHalf) / 5);
-  const xMax = 5 * Math.ceil((xCenter + xHalf) / 5);
-  const yMin = 5 * Math.floor((yCenter - yHalf) / 5);
-  const yMax = 5 * Math.ceil((yCenter + yHalf) / 5);
+  const xMin = 5 * Math.floor((xCenter - halfSpan) / 5);
+  const xMax = xMin + targetSpan;
+  const yMin = 5 * Math.floor((yCenter - halfSpan) / 5);
+  const yMax = yMin + targetSpan;
 
   return {
     x: { min: xMin, max: xMax, step: 5 },
@@ -188,7 +180,7 @@ export function renderTrajectoryPlot(target, result, visualization) {
   const { width, height, leftAxis, rightAxis } = getPlotSize(target);
   const rawXAxis = computeAxisBoundsStep5(result.states.x);
   const rawYAxis = computeYAxisBoundsStep5(result.states.y);
-  const equalAxes = enforceCappedAspect(rawXAxis, rawYAxis);
+  const equalAxes = enforceEqualAspect(rawXAxis, rawYAxis);
   const xAxis = equalAxes.x;
   const yAxis = equalAxes.y;
   const xTicks = buildTicks(xAxis);

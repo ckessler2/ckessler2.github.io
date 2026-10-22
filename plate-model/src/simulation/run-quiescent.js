@@ -3,7 +3,11 @@ import { nondimFreelyFallingPlate } from "./nondim-falling-plate-quiescent.js";
 import { estimateResultMemoryBytes } from "./metrics.js";
 
 export function runQuiescentSimulation(config) {
+  // Integrate the quiescent plate ODE with the configured solver settings.
   const raw = solveFixedStep({ rhs: nondimFreelyFallingPlate, config });
+
+  // Reformat state history from packed vectors into named arrays
+  // so plotting/export code can consume each variable directly.
   const states = {
     v_xp: raw.states.map((state) => state[0]),
     v_yp: raw.states.map((state) => state[1]),
@@ -14,6 +18,9 @@ export function runQuiescentSimulation(config) {
   };
 
   const lastIndex = raw.t.length - 1;
+
+  // Build the result payload with full time series, final state snapshot,
+  // and runtime/solver metadata used in the UI debug panel.
   const result = {
     t: raw.t,
     states,
@@ -35,5 +42,7 @@ export function runQuiescentSimulation(config) {
   };
 
   result.metadata.estimatedMemoryBytes = estimateResultMemoryBytes(result);
+
+  // Add a quick memory estimate for telemetry and guardrail visibility.
   return result;
 }
