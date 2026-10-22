@@ -24,6 +24,10 @@ export function createDefaultConfig() {
       dt: 0.1,
       t_end: 50,
       method: "rk4",
+      relTol: 1e-6,
+      absTol: 1e-9,
+      minStep: 1e-8,
+      maxStep: 0.1,
       maxRuntimeMs: 1000,
       maxAbsState: 1000000,
     },
@@ -67,5 +71,8 @@ export const solverFields = [
   { name: "t_end", labelTex: "t_{\\mathrm{end}}" },
 ];
 
-export const solverOptions = [{ value: "rk4", label: "RK4" }];
+export const solverOptions = [
+  { value: "rk4", label: "RK4 (fixed step)" },
+  { value: "rk45", label: "RK45 (adaptive, ode45-like)" },
+];
 

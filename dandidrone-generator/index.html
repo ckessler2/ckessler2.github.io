@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dandidrone DXF Generator</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <h1>Dandelion DXF Generator</h1>
+
+      <section class="panel controls">
+        <label>
+          Diameter (mm)
+          <input id="diameter" type="number" min="0.001" step="0.1" value="20" />
+        </label>
+
+        <label>
+          Filament width (mm)
+          <input id="width" type="number" min="0.001" step="0.01" value="0.1" />
+        </label>
+
+        <label>
+          Number of filaments
+          <input id="count" type="number" min="1" step="1" value="50" />
+        </label>
+
+        <div class="buttons">
+          <button id="generate" type="button">Generate</button>
+          <button id="export" type="button" disabled>Export DXF</button>
+        </div>
+
+        <p id="status" class="status">Enter values and click Generate.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Preview</h2>
+        <svg id="preview" viewBox="-1 -1 2 2" aria-label="Generated dandelion outline"></svg>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

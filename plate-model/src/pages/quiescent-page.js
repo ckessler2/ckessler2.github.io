@@ -198,6 +198,21 @@ export function renderQuiescentPage({ state, renderMath }) {
   const inputMap = {};
   let autoRunTimer = null;
 
+  function applyFormValues(nextValues) {
+    for (const [name, input] of Object.entries(inputMap)) {
+      if (!(name in nextValues)) {
+        continue;
+      }
+
+      const nextValue = nextValues[name];
+      if (input.type === "checkbox") {
+        input.checked = Boolean(nextValue);
+      } else {
+        input.value = String(nextValue);
+      }
+    }
+  }
+
   function scheduleAutoRun() {
     if (!autoRunToggle.checked) {
       return;
@@ -208,7 +223,24 @@ export function renderQuiescentPage({ state, renderMath }) {
 
   const inputsContent = document.createElement("div");
   inputsContent.className = "page-flow";
+
+  const validationCasesContent = document.createElement("div");
+  validationCasesContent.className = "toolbar-main";
+
+  const alsomitraDefaultButton = document.createElement("button");
+  alsomitraDefaultButton.className = "header-action-button";
+  alsomitraDefaultButton.type = "button";
+  alsomitraDefaultButton.textContent = "Alsomitra (default)";
+  alsomitraDefaultButton.addEventListener("click", () => {
+    const defaultValues = flattenConfig(createDefaultConfig());
+    applyFormValues(defaultValues);
+    execute();
+  });
+
+  validationCasesContent.append(alsomitraDefaultButton);
+
   inputsContent.append(
+    createSectionBlock("Validation cases", validationCasesContent),
     createSectionBlock(
       "Nondimensional parameters",
       createFieldGrid(modelFields, values, inputMap, renderMath, { onInput: scheduleAutoRun }),

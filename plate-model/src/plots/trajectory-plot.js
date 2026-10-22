@@ -167,6 +167,52 @@ function drawAxisLimitBox(u, color) {
   u.ctx.restore();
 }
 
+function findNearestTrajectoryIndex(u) {
+  const event = u.cursor.event;
+  if (!event || typeof event.clientX !== "number" || typeof event.clientY !== "number") {
+    return null;
+  }
+
+  const rect = u.over.getBoundingClientRect();
+  const cursorLeft = event.clientX - rect.left;
+  const cursorTop = event.clientY - rect.top;
+
+  if (!Number.isFinite(cursorLeft) || !Number.isFinite(cursorTop)) {
+    return null;
+  }
+
+  const xSeries = u.data[0] ?? [];
+  const ySeries = u.data[1] ?? [];
+  const pointCount = Math.min(xSeries.length, ySeries.length);
+  if (!pointCount) {
+    return null;
+  }
+
+  let nearestIndex = null;
+  let nearestDistanceSquared = Infinity;
+
+  for (let index = 0; index < pointCount; index += 1) {
+    const xValue = xSeries[index];
+    const yValue = ySeries[index];
+    if (!Number.isFinite(xValue) || !Number.isFinite(yValue)) {
+      continue;
+    }
+
+    const xPixel = u.valToPos(xValue, "x");
+    const yPixel = u.valToPos(yValue, "y");
+    const dx = xPixel - cursorLeft;
+    const dy = yPixel - cursorTop;
+    const distanceSquared = dx * dx + dy * dy;
+
+    if (distanceSquared < nearestDistanceSquared) {
+      nearestDistanceSquared = distanceSquared;
+      nearestIndex = index;
+    }
+  }
+
+  return nearestIndex;
+}
+
 export function renderTrajectoryPlot(target, result, visualization) {
   const uPlotLib = window.uPlot;
   if (!uPlotLib) {
@@ -271,7 +317,7 @@ export function renderTrajectoryPlot(target, result, visualization) {
     hooks: {
       setCursor: [
         (u) => {
-          const idx = u.cursor.idx;
+          const idx = findNearestTrajectoryIndex(u);
           if (idx == null || idx < 0) {
             coordReadout.textContent = "x: -, y: -";
             return;

@@ -1,10 +1,10 @@
-import { solveFixedStep } from "./solver-rk4.js";
+import { solveSimulation } from "./solver-rk4.js";
 import { nondimFreelyFallingPlate } from "./nondim-falling-plate-quiescent.js";
 import { estimateResultMemoryBytes } from "./metrics.js";
 
 export function runQuiescentSimulation(config) {
   // Integrate the quiescent plate ODE with the configured solver settings.
-  const raw = solveFixedStep({ rhs: nondimFreelyFallingPlate, config });
+  const raw = solveSimulation({ rhs: nondimFreelyFallingPlate, config });
 
   // Reformat state history from packed vectors into named arrays
   // so plotting/export code can consume each variable directly.

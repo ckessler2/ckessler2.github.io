@@ -191,12 +191,12 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   return [dv_xpdt, dv_ypdt, domegadt, dthetadt, dx_dt, dy_dt];
 }`;
 
-const runnerSource = `import { solveFixedStep } from "./solver-rk4.js";
+const runnerSource = `import { solveSimulation } from "./solver-rk4.js";
 import { nondimFreelyFallingPlate } from "./nondim-falling-plate-quiescent.js";
 import { estimateResultMemoryBytes } from "./metrics.js";
 
 export function runQuiescentSimulation(config) {
-  const raw = solveFixedStep({ rhs: nondimFreelyFallingPlate, config });
+  const raw = solveSimulation({ rhs: nondimFreelyFallingPlate, config });
   const states = {
     v_xp: raw.states.map((state) => state[0]),
     v_yp: raw.states.map((state) => state[1]),
