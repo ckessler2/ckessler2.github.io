@@ -1,8 +1,10 @@
 const diameterInput = document.getElementById("diameter");
 const widthInput = document.getElementById("width");
 const countInput = document.getElementById("count");
+const svgSolidInput = document.getElementById("svg-solid");
 const generateButton = document.getElementById("generate");
 const exportButton = document.getElementById("export");
+const exportSvgButton = document.getElementById("export-svg");
 const statusEl = document.getElementById("status");
 const previewSvg = document.getElementById("preview");
 
@@ -49,7 +51,14 @@ function sampleBoundary({ diameter, width, count }) {
   const outerRadius = diameter / 2;
   const halfWidth = width / 2;
   const filamentLength = Math.sqrt(outerRadius ** 2 - halfWidth ** 2);
-  const samples = Math.max(720, count * 30);
+  const tipHalfAngle = Math.atan2(halfWidth, filamentLength);
+  const targetStep = Math.max(tipHalfAngle / 16, 2e-5);
+  const samplesFromTipResolution = Math.ceil((2 * Math.PI) / targetStep);
+  const lowCountBoost = count <= 4 ? 2 : 1;
+  const samples = Math.min(
+    250000,
+    Math.max(2000, count * 80, samplesFromTipResolution * lowCountBoost),
+  );
   const points = [];
 
   for (let i = 0; i < samples; i += 1) {
@@ -115,7 +124,7 @@ function updatePreview(points, outerRadius) {
   previewSvg.append(grid, polygon);
 }
 
-function makeDxf(points) {
+function makeDxf(points, solidNoOutline) {
   const lines = [
     "0",
     "SECTION",
@@ -131,22 +140,90 @@ function makeDxf(points) {
     "SECTION",
     "2",
     "ENTITIES",
-    "0",
-    "LWPOLYLINE",
-    "8",
-    "CUT_OUTLINE",
-    "90",
-    String(points.length),
-    "70",
-    "1",
   ];
 
-  for (const point of points) {
-    lines.push("10", point.x.toFixed(9), "20", point.y.toFixed(9));
+  if (solidNoOutline) {
+    for (let i = 0; i < points.length; i += 1) {
+      const first = points[i];
+      const second = points[(i + 1) % points.length];
+      lines.push(
+        "0",
+        "SOLID",
+        "8",
+        "CUT_OUTLINE",
+        "10",
+        "0.000000000",
+        "20",
+        "0.000000000",
+        "11",
+        first.x.toFixed(9),
+        "21",
+        first.y.toFixed(9),
+        "12",
+        second.x.toFixed(9),
+        "22",
+        second.y.toFixed(9),
+        "13",
+        second.x.toFixed(9),
+        "23",
+        second.y.toFixed(9),
+      );
+    }
+  } else {
+    lines.push(
+      "0",
+      "LWPOLYLINE",
+      "8",
+      "CUT_OUTLINE",
+      "90",
+      String(points.length),
+      "70",
+      "1",
+    );
+
+    for (const point of points) {
+      lines.push("10", point.x.toFixed(9), "20", point.y.toFixed(9));
+    }
   }
 
   lines.push("0", "ENDSEC", "0", "EOF");
   return `${lines.join("\n")}\n`;
+}
+
+function makeSvg(points, params, solidNoOutline) {
+  const outerRadius = params.diameter / 2;
+  const margin = outerRadius * 0.1 + 0.05;
+  const extent = outerRadius + margin;
+  const viewBox = `${-extent} ${-extent} ${2 * extent} ${2 * extent}`;
+  const polygonPoints = points
+    .map((point) => `${point.x.toFixed(5)},${point.y.toFixed(5)}`)
+    .join(" ");
+  const polygonStyle = solidNoOutline
+    ? 'fill="#111" stroke="none"'
+    : 'fill="none" stroke="#111" stroke-width="0.075"';
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="${2 * extent}mm" height="${2 * extent}mm">`,
+    `  <polygon points="${polygonPoints}" ${polygonStyle} vector-effect="non-scaling-stroke" />`,
+    "</svg>",
+    "",
+  ].join("\n");
+}
+
+function downloadTextFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  return filename;
 }
 
 function handleGenerate() {
@@ -156,12 +233,14 @@ function handleGenerate() {
     updatePreview(points, outerRadius);
     latest = { params, points };
     exportButton.disabled = false;
+    exportSvgButton.disabled = false;
     setStatus(
       `Generated outline: D=${params.diameter} mm, W=${params.width} mm, N=${params.count}.`,
     );
   } catch (error) {
     latest = null;
     exportButton.disabled = true;
+    exportSvgButton.disabled = true;
     previewSvg.replaceChildren();
     setStatus(error instanceof Error ? error.message : "Failed to generate outline.", true);
   }
@@ -174,20 +253,31 @@ function handleExport() {
   }
 
   const { params, points } = latest;
-  const dxfText = makeDxf(points);
-  const blob = new Blob([dxfText], { type: "application/dxf" });
-  const url = URL.createObjectURL(blob);
+  const dxfText = makeDxf(points, svgSolidInput.checked);
+  const filename = downloadTextFile(
+    dxfText,
+    `dandelion_D${params.diameter}_W${params.width}_N${params.count}.dxf`,
+    "application/dxf",
+  );
+  setStatus(`Exported ${filename}.`);
+}
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `dandelion_D${params.diameter}_W${params.width}_N${params.count}.dxf`;
-  document.body.append(link);
-  link.click();
-  link.remove();
+function handleExportSvg() {
+  if (!latest) {
+    setStatus("Generate an outline before exporting.", true);
+    return;
+  }
 
-  URL.revokeObjectURL(url);
-  setStatus(`Exported ${link.download}.`);
+  const { params, points } = latest;
+  const svgText = makeSvg(points, params, svgSolidInput.checked);
+  const filename = downloadTextFile(
+    svgText,
+    `dandelion_D${params.diameter}_W${params.width}_N${params.count}.svg`,
+    "image/svg+xml",
+  );
+  setStatus(`Exported ${filename}.`);
 }
 
 generateButton.addEventListener("click", handleGenerate);
 exportButton.addEventListener("click", handleExport);
+exportSvgButton.addEventListener("click", handleExportSvg);

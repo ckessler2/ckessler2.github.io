@@ -3,12 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dandidrone DXF Generator</title>
+    <title>Dandidrone Outline Generator</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <main class="app">
-      <h1>Dandelion DXF Generator</h1>
+      <h1>Dandidrone outline generator</h1>
+      <p class="byline">by Colin Kessler (<a href="../">Homepage</a>)</p>
 
       <section class="panel controls">
         <label>
@@ -26,9 +27,15 @@
           <input id="count" type="number" min="1" step="1" value="50" />
         </label>
 
+        <label class="checkbox-row">
+          <input id="svg-solid" type="checkbox" checked />
+          Solid outline
+        </label>
+
         <div class="buttons">
           <button id="generate" type="button">Generate</button>
           <button id="export" type="button" disabled>Export DXF</button>
+          <button id="export-svg" type="button" disabled>Export SVG</button>
         </div>
 
         <p id="status" class="status">Enter values and click Generate.</p>

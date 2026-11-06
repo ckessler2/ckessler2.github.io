@@ -100,7 +100,7 @@ header {
     padding: 2px 0; /* Tiny padding for spacing between info lines */
     color: #333; /* Dark grey text color */
     font-size: 14px; /* Smaller font size for contact details */
-    width: 100%; /* Full width of their parent element */
+    width: 90%; /* Full width of their parent element */
     padding: 0 20px;
     text-align: center; /* Ensures centered alignment */
 }
