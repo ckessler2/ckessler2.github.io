@@ -34,20 +34,27 @@ export function readConfigFromForm(formState) {
       dt: Number(formState.dt),
       t_end: Number(formState.t_end),
       method: formState.solverMethod,
+      relTol: Number(formState.relTol),
+      absTol: Number(formState.absTol),
+      minStep: 1e-8,
+      maxStep: Number(formState.maxStep),
       maxRuntimeMs: 1000,
       maxAbsState: 1000000,
     },
-    visualization: {
-      showStartMarker: Boolean(formState.showStartMarker),
-      showEndMarker: Boolean(formState.showEndMarker),
-    },
   };
 
-  if (config.solver.dt <= 0 || config.solver.t_end <= 0) {
+  if (!(config.solver.dt > 0) || !(config.solver.t_end > 0)) {
     throw new Error("dt and t_end must both be positive.");
   }
 
-  if (config.model.m_prime <= 0 || config.model.gamma <= 0 || config.model.inertia <= 0) {
+  if (
+    config.solver.method === "rk45" &&
+    !(config.solver.relTol > 0 && config.solver.absTol > 0 && config.solver.maxStep > 0)
+  ) {
+    throw new Error("RK45 tolerances and max step must all be positive.");
+  }
+
+  if (!(config.model.m_prime > 0 && config.model.gamma > 0 && config.model.inertia > 0)) {
     throw new Error("m_prime, gamma, and inertia must all be positive.");
   }
 

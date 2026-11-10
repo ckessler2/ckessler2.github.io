@@ -29,8 +29,6 @@
   --plot-text: #17212b;
   --plot-axis: #17212b;
   --plot-trajectory: #0f5b78;
-  --plot-start: #2e7d32;
-  --plot-end: #c62828;
   --plot-state-1: #0f5b78;
   --plot-state-2: #ff7f11;
   --plot-state-3: #2e7d32;
@@ -39,6 +37,11 @@
 
 * {
   box-sizing: border-box;
+}
+
+/* Keep the hidden attribute working on elements that set their own display. */
+[hidden] {
+  display: none !important;
 }
 
 body {
@@ -73,8 +76,6 @@ body[data-theme="dark"] {
   --plot-text: #f3f5f7;
   --plot-axis: #f3f5f7;
   --plot-trajectory: #5ec8ff;
-  --plot-start: #6dff8b;
-  --plot-end: #ff7a7a;
   --plot-state-1: #5ec8ff;
   --plot-state-2: #ffb347;
   --plot-state-3: #6dff8b;

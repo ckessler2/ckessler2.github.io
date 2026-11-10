@@ -72,18 +72,6 @@ function rk45DormandPrinceStep(rhs, t, state, dt, config) {
     ]),
     config,
   );
-  const k7 = rhs(
-    t + dt,
-    addMany(state, [
-      [dt * (35 / 384), k1],
-      [dt * (500 / 1113), k3],
-      [dt * (125 / 192), k4],
-      [dt * (-2187 / 6784), k5],
-      [dt * (11 / 84), k6],
-    ]),
-    config,
-  );
-
   const nextState = addMany(state, [
     [dt * (35 / 384), k1],
     [dt * (500 / 1113), k3],
@@ -91,6 +79,9 @@ function rk45DormandPrinceStep(rhs, t, state, dt, config) {
     [dt * (-2187 / 6784), k5],
     [dt * (11 / 84), k6],
   ]);
+
+  // Dormand–Prince evaluates its last stage at the 5th-order solution itself.
+  const k7 = rhs(t + dt, nextState, config);
 
   const embeddedState = addMany(state, [
     [dt * (5179 / 57600), k1],
@@ -121,8 +112,10 @@ export function solveFixedStep({ rhs, config }) {
   const { dt, t_end } = config.solver;
   const maxRuntimeMs = config.solver.maxRuntimeMs ?? Infinity;
   const maxAbsState = config.solver.maxAbsState ?? Infinity;
-  const stepCount = Math.floor(t_end / dt);
-  const t = Array.from({ length: stepCount + 1 }, (_, index) => index * dt);
+  // Round up (with a small tolerance for float error such as 0.3 / 0.1 = 2.999…)
+  // and clamp the final time, so the run always ends exactly at t_end.
+  const stepCount = Math.ceil(t_end / dt - 1e-9);
+  const t = Array.from({ length: stepCount + 1 }, (_, index) => Math.min(index * dt, t_end));
   const states = new Array(stepCount + 1);
   const initial = config.initialConditions;
 
@@ -141,7 +134,7 @@ export function solveFixedStep({ rhs, config }) {
       throw new Error(`Simulation exceeded ${maxRuntimeMs} ms runtime limit.`);
     }
 
-    states[index + 1] = rk4Step(rhs, t[index], states[index], dt, config);
+    states[index + 1] = rk4Step(rhs, t[index], states[index], t[index + 1] - t[index], config);
 
     const nextState = states[index + 1];
     if (!isFiniteState(nextState)) {

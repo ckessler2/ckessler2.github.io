@@ -38,16 +38,16 @@ function evaluateLiEtAlAerodynamics(alpha, coefficients) {
   }
 
   const C_Dalpha1 =
-    Falpha1 * (C_D0 + C_D1 * Math.sin((Math.PI - Math.abs(alpha)) ** 2)) +
+    Falpha1 * (C_D0 + C_D1 * Math.sin(Math.PI - Math.abs(alpha)) ** 2) +
     (1 - Falpha1) * C_D_pi_2 * Math.sin(Math.PI - Math.abs(alpha)) ** 2;
   const C_Dalpha2 =
-    Falpha2 * (C_D0 + C_D1 * Math.sin(Math.abs(alpha) ** 2)) +
+    Falpha2 * (C_D0 + C_D1 * Math.sin(Math.abs(alpha)) ** 2) +
     (1 - Falpha2) * C_D_pi_2 * Math.sin(Math.abs(alpha)) ** 2;
   const C_Dalpha3 =
-    Falpha3 * (C_D0 + C_D1 * Math.sin(alpha ** 2)) +
+    Falpha3 * (C_D0 + C_D1 * Math.sin(alpha) ** 2) +
     (1 - Falpha3) * C_D_pi_2 * Math.sin(alpha) ** 2;
   const C_Dalpha4 =
-    Falpha4 * (C_D0 + C_D1 * Math.sin((Math.PI - alpha) ** 2)) +
+    Falpha4 * (C_D0 + C_D1 * Math.sin(Math.PI - alpha) ** 2) +
     (1 - Falpha4) * C_D_pi_2 * Math.sin(Math.PI - alpha) ** 2;
 
   let C_Dalpha;
@@ -99,11 +99,9 @@ export function nondimFreelyFallingPlate(_t, state, config) {
   const { coefficients, e_x } = config.aero;
   const C_R = coefficients[8];
   const C_D_pi_2 = coefficients[4];
-  const l = config.model.plateLength ?? 0.07;
-  const l_CM = e_x * l;
-
   // Nondimensional angle-of-attack relation from the reduced equations.
-  const alpha = Math.atan2(v_yp - omega * l_CM, v_xp);
+  // Lengths are scaled by the plate length, so the CoM offset is e_x itself.
+  const alpha = Math.atan2(v_yp - omega * e_x, v_xp);
 
   // Evaluate aerodynamic coefficients and center-of-pressure offset
   // for the current instantaneous angle of attack.

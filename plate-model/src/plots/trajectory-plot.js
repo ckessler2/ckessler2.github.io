@@ -1,57 +1,13 @@
 import { renderMath } from "../app/math.js";
-
-function niceIntegerStep(minStep) {
-  const safeMinStep = Math.max(1, minStep);
-  const exponent = Math.floor(Math.log10(safeMinStep));
-  const base = 10 ** exponent;
-  const scaled = safeMinStep / base;
-
-  if (scaled <= 1) {
-    return base;
-  }
-  if (scaled <= 2) {
-    return 2 * base;
-  }
-  if (scaled <= 5) {
-    return 5 * base;
-  }
-  return 10 * base;
-}
-
-function computeAxisBounds(values) {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (!finiteValues.length) {
-    return { min: -1, max: 1, step: 1 };
-  }
-
-  const min = Math.floor(Math.min(...finiteValues));
-  let max = Math.ceil(Math.max(...finiteValues));
-
-  if (max === min) {
-    max = min + 1;
-  }
-
-  const span = max - min;
-  const targetTickCount = 7;
-  const minStep = Math.ceil(span / targetTickCount);
-  const step = niceIntegerStep(minStep);
-  const adjustedMax = min + Math.ceil(span / step) * step;
-
-  return {
-    min,
-    max: adjustedMax,
-    step,
-  };
-}
+import { buildTicks, drawAxisLimitBox, finiteExtent, getPlotTheme } from "./plot-utils.js";
 
 function computeAxisBoundsStep5(values) {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (!finiteValues.length) {
+  const extent = finiteExtent(values);
+  if (!extent) {
     return { min: -5, max: 5, step: 5 };
   }
 
-  const rawMin = Math.min(...finiteValues);
-  const rawMax = Math.max(...finiteValues);
+  const { min: rawMin, max: rawMax } = extent;
   let min = 5 * Math.floor(rawMin / 5);
   let max = 5 * Math.ceil(rawMax / 5);
 
@@ -64,13 +20,12 @@ function computeAxisBoundsStep5(values) {
 }
 
 function computeYAxisBoundsStep5(values) {
-  const finiteValues = values.filter((value) => Number.isFinite(value));
-  if (!finiteValues.length) {
+  const extent = finiteExtent(values);
+  if (!extent) {
     return { min: -5, max: 0, step: 5 };
   }
 
-  const rawMin = Math.min(...finiteValues);
-  const rawMax = Math.max(...finiteValues);
+  const { min: rawMin, max: rawMax } = extent;
   const min = 5 * Math.floor(rawMin / 5);
   let max = rawMax === 0 ? 0 : 5 * Math.ceil(rawMax / 5);
 
@@ -79,18 +34,6 @@ function computeYAxisBoundsStep5(values) {
   }
 
   return { min, max, step: 5 };
-}
-
-function getPlotTheme() {
-  const styles = getComputedStyle(document.body);
-  return {
-    plotBg: styles.getPropertyValue("--plot-bg").trim(),
-    text: styles.getPropertyValue("--plot-text").trim(),
-    axis: styles.getPropertyValue("--plot-axis").trim(),
-    trajectory: styles.getPropertyValue("--plot-trajectory").trim(),
-    fontFamily: styles.fontFamily,
-    fontSize: parseFloat(styles.fontSize) || 14,
-  };
 }
 
 function getPlotSize(target) {
@@ -124,47 +67,6 @@ function enforceEqualAspect(xAxis, yAxis) {
     x: { min: xMin, max: xMax, step: 5 },
     y: { min: yMin, max: yMax, step: 5 },
   };
-}
-
-function buildTicks(bounds) {
-  const { min, max } = bounds;
-  let step = Math.max(1, bounds.step);
-  const maxTickTarget = 9;
-
-  function generateTicks(currentStep) {
-    const tickSet = new Set([min, max]);
-
-    const start = Math.ceil(min / currentStep) * currentStep;
-    const count = Math.max(0, Math.floor((max - start) / currentStep) + 1);
-    const cappedCount = Math.min(count, maxTickTarget + 2);
-
-    for (let index = 0; index < cappedCount; index += 1) {
-      tickSet.add(start + index * currentStep);
-    }
-
-    if (min <= 0 && 0 <= max) {
-      tickSet.add(0);
-    }
-
-    return Array.from(tickSet).sort((a, b) => a - b);
-  }
-
-  let ticks = generateTicks(step);
-  while (ticks.length > maxTickTarget) {
-    step *= 2;
-    ticks = generateTicks(step);
-  }
-
-  return ticks;
-}
-
-function drawAxisLimitBox(u, color) {
-  const { left, top, width, height } = u.bbox;
-  u.ctx.save();
-  u.ctx.strokeStyle = color;
-  u.ctx.lineWidth = 1;
-  u.ctx.strokeRect(left + 0.5, top + 0.5, width - 1, height - 1);
-  u.ctx.restore();
 }
 
 function findNearestTrajectoryIndex(u) {
@@ -213,7 +115,7 @@ function findNearestTrajectoryIndex(u) {
   return nearestIndex;
 }
 
-export function renderTrajectoryPlot(target, result, visualization) {
+export function renderTrajectoryPlot(target, result) {
   const uPlotLib = window.uPlot;
   if (!uPlotLib) {
     target.textContent = "uPlot not loaded.";
@@ -231,8 +133,8 @@ export function renderTrajectoryPlot(target, result, visualization) {
   const yAxis = equalAxes.y;
   const xTicks = buildTicks(xAxis);
   const yTicks = buildTicks(yAxis);
-  const theme = getPlotTheme();
-  const axisColor = "#000";
+  const theme = getPlotTheme({ trajectory: "--plot-trajectory" });
+  const axisColor = theme.axis;
 
   const wrapper = document.createElement("div");
   wrapper.className = "plot-math-wrap";

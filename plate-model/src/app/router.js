@@ -1,21 +1,16 @@
 import { renderNav } from "../components/nav.js";
-import { renderEquationsPage } from "../pages/equations-page.js";
+import { renderSourcePage } from "../pages/source-page.js";
 import { renderQuiescentPage } from "../pages/quiescent-page.js";
-import { renderGustPage } from "../pages/gust-page.js";
 import { renderMath } from "./math.js";
 
 const routes = {
-  equations: {
-    label: "Equations",
-    render: renderEquationsPage,
+  source: {
+    label: "Source Code",
+    render: renderSourcePage,
   },
   quiescent: {
     label: "Quiescent Simulator",
     render: renderQuiescentPage,
-  },
-  gust: {
-    label: "Gust Simulator",
-    render: renderGustPage,
   },
 };
 
@@ -115,12 +110,3 @@ export function createRouter(root, state) {
     },
   };
 }
-
-
-
-
-
-
-
-
-

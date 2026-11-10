@@ -31,10 +31,6 @@ export function createDefaultConfig() {
       maxRuntimeMs: 1000,
       maxAbsState: 1000000,
     },
-    visualization: {
-      showStartMarker: true,
-      showEndMarker: true,
-    },
   };
 }
 
@@ -69,6 +65,13 @@ export const initialConditionFields = [
 export const solverFields = [
   { name: "dt", labelTex: "\\Delta t" },
   { name: "t_end", labelTex: "t_{\\mathrm{end}}" },
+];
+
+// Only shown when the RK45 solver is selected.
+export const adaptiveSolverFields = [
+  { name: "relTol", label: "Rel. tolerance" },
+  { name: "absTol", label: "Abs. tolerance" },
+  { name: "maxStep", labelTex: "\\Delta t_{\\max}" },
 ];
 
 export const solverOptions = [

@@ -6,6 +6,7 @@ import { readConfigFromForm } from "../simulation/config.js";
 import { exportQuiescentResultCsv } from "../export/export-quiescent-csv.js";
 import { exportQuiescentTrajectorySvg } from "../export/export-xy-svg.js";
 import {
+  adaptiveSolverFields,
   aeroCoefficientFields,
   createDefaultConfig,
   initialConditionFields,
@@ -30,8 +31,9 @@ function flattenConfig(config) {
     dt: config.solver.dt,
     t_end: config.solver.t_end,
     solverMethod: config.solver.method,
-    showStartMarker: config.visualization.showStartMarker,
-    showEndMarker: config.visualization.showEndMarker,
+    relTol: config.solver.relTol,
+    absTol: config.solver.absTol,
+    maxStep: config.solver.maxStep,
   };
 }
 
@@ -111,7 +113,7 @@ function buildModelInfoSection() {
 
   intro.append(
     sourceLink,
-    ", these equations predict 2D quasi-steady aerodynamic forces on free-falling thin plates with differing centre of mass (CoM) locations, and can predict fluttering, tumbling, bounding, gliding and diving. This JavaScript app solves the equations with a fixed-step fourth-order Runge–Kutta solver.",
+    ", these equations predict 2D quasi-steady aerodynamic forces on free-falling thin plates with differing centre of mass (CoM) locations, and can predict fluttering, tumbling, bounding, gliding and diving. This JavaScript app solves the equations in nondimensional form.",
   );
   wrapper.append(summary, intro);
   return wrapper;
@@ -234,6 +236,7 @@ export function renderQuiescentPage({ state, renderMath }) {
   alsomitraDefaultButton.addEventListener("click", () => {
     const defaultValues = flattenConfig(createDefaultConfig());
     applyFormValues(defaultValues);
+    syncAdaptiveFields();
     execute();
   });
 
@@ -275,11 +278,29 @@ export function renderQuiescentPage({ state, renderMath }) {
     renderMath,
   });
   inputMap.solverMethod = solverMethodField.input;
-  solverMethodField.input.addEventListener("change", scheduleAutoRun);
   solverGrid.append(solverMethodField.wrapper);
 
+  // Tolerances only apply to the adaptive solver, so hide them for fixed-step RK4.
+  const adaptiveGrid = createFieldGrid(adaptiveSolverFields, values, inputMap, renderMath, {
+    onInput: scheduleAutoRun,
+  });
+
+  function syncAdaptiveFields() {
+    adaptiveGrid.hidden = solverMethodField.input.value !== "rk45";
+  }
+
+  syncAdaptiveFields();
+  solverMethodField.input.addEventListener("change", () => {
+    syncAdaptiveFields();
+    scheduleAutoRun();
+  });
+
+  const solverContent = document.createElement("div");
+  solverContent.className = "page-flow";
+  solverContent.append(solverGrid, adaptiveGrid);
+
   inputsContent.append(
-    createSectionBlock("Solver settings", solverGrid),
+    createSectionBlock("Solver settings", solverContent),
   );
 
   const exportContent = document.createElement("div");
@@ -346,7 +367,7 @@ export function renderQuiescentPage({ state, renderMath }) {
   function refreshPlots() {
     const latestState = state.getState();
     if (latestState.quiescentResult) {
-      renderTrajectoryPlot(trajectorySection.plot, latestState.quiescentResult, latestState.config.visualization);
+      renderTrajectoryPlot(trajectorySection.plot, latestState.quiescentResult);
       renderStatePlot(stateSection.plot, latestState.quiescentResult);
     }
   }
@@ -403,8 +424,8 @@ export function renderQuiescentPage({ state, renderMath }) {
     return formState;
   }
 
-  function updatePlots(result, activeConfig) {
-    renderTrajectoryPlot(trajectorySection.plot, result, activeConfig.visualization);
+  function updatePlots(result) {
+    renderTrajectoryPlot(trajectorySection.plot, result);
     renderStatePlot(stateSection.plot, result);
 
     const nextDebugAccordion = buildAccordion(
@@ -424,7 +445,7 @@ export function renderQuiescentPage({ state, renderMath }) {
       const result = runQuiescentSimulation(nextConfig);
       state.setConfig(nextConfig);
       state.setQuiescentResult(result);
-      updatePlots(result, nextConfig);
+      updatePlots(result);
       status.textContent = `${result.metadata.stepCount.toLocaleString()} steps in ${formatRuntimeMs(result.metadata.runtimeMs)} ms`;
     } catch (error) {
       if (
@@ -442,7 +463,7 @@ export function renderQuiescentPage({ state, renderMath }) {
 
   const existingResult = state.getState().quiescentResult;
   if (existingResult) {
-    updatePlots(existingResult, config);
+    updatePlots(existingResult);
     status.textContent = `${existingResult.metadata.stepCount.toLocaleString()} steps in ${formatRuntimeMs(existingResult.metadata.runtimeMs)} ms`;
   } else {
     execute();
