@@ -89,8 +89,9 @@ body {
 }
 
 /* Leave room on the left so text never runs under the photo */
+/* Room for the photo (~83px wide at the header's usual height) plus a gap */
 .header-text {
-    padding-left: 130px;
+    padding-left: 108px;
 }
 
 /* Pinned to the left edge; height fills the card's padding box, width follows the photo's aspect ratio */
@@ -98,7 +99,7 @@ body {
     position: absolute;
     top: 12px;
     bottom: 12px;
-    left: 20px;
+    left: 12px;
     height: calc(100% - 24px);
     width: auto;
 }
@@ -177,20 +178,13 @@ hr {
     .content-layer {
         padding: 16px;
     }
-    /* Photo flows above the text instead of squeezing it */
+    /* Photo stays beside the text. The text wraps onto more lines here, so the
+       header (and the photo, which matches its height) gets taller and wider. */
     .header-content {
-        display: flex;
-        flex-direction: column-reverse;
-        align-items: flex-start;
+        padding: 12px;
     }
     .header-text {
-        padding-left: 0;
-    }
-    .header-photo {
-        position: static;
-        display: block;
-        height: 120px;
-        margin-bottom: 12px;
+        padding-left: 130px;
     }
     .conference-proceeding {
         display: flex;
