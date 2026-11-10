@@ -68,6 +68,7 @@ body {
 .conference-proceeding .proc-title {
     grid-area: title;
     margin: 0;
+    text-align: left; /* body text is justified; titles shouldn't stretch */
 }
 
 .text-content {
