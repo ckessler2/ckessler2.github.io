@@ -149,6 +149,8 @@ a {
     top: calc(100% + 6px);
     left: 0;
     min-width: 200px;
+    width: max-content; /* fit the longest link instead of wrapping (Chrome) */
+    text-align: left;   /* don't inherit the page's justified text */
     display: none;
     background: rgba(236, 236, 236, 0.98);
     border: 1px solid #d8dee8;
