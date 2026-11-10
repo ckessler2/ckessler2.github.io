@@ -33,7 +33,7 @@ body {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
     background-color: rgba(236, 236, 236, 0.92);
-    z-index: 1;
+    z-index: 0;
 }
 
 .content-layer {
@@ -76,14 +76,6 @@ body {
 
 
 
-
-header {
-    background-color: rgba(236, 236, 236, 0.92); /* Set background color and opacity */
-    padding: 10px; /* Add padding around the text */
-    width: 500px; /* Control the width of the content box */
-    backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
-    
-}
 
 .header-content {
     width: 100%;
@@ -173,7 +165,7 @@ header {
 hr {
     border: none;         /* Removes default border styles */
     height: 1px;          /* Sets the height of the HR line */
-    background-color: rgb(0, 0, 0); /* Makes the HR line solid white */
+    background-color: rgb(0, 0, 0); /* Makes the HR line solid black */
     margin: 20px 0;       /* Adds vertical spacing above and below the HR line */
 }
 
@@ -184,6 +176,21 @@ hr {
     }
     .content-layer {
         padding: 16px;
+    }
+    /* Photo flows above the text instead of squeezing it */
+    .header-content {
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: flex-start;
+    }
+    .header-text {
+        padding-left: 0;
+    }
+    .header-photo {
+        position: static;
+        display: block;
+        height: 120px;
+        margin-bottom: 12px;
     }
     .conference-proceeding {
         display: flex;
