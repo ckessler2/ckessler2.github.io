@@ -93,6 +93,22 @@ header {
     border: 1px solid #d8dee8;
     border-radius: 10px;
     background-color: rgba(236, 236, 236, 0.92);
+    position: relative;
+}
+
+/* Leave room on the left so text never runs under the photo */
+.header-text {
+    padding-left: 130px;
+}
+
+/* Pinned to the left edge; height fills the card's padding box, width follows the photo's aspect ratio */
+.header-photo {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 20px;
+    height: calc(100% - 24px);
+    width: auto;
 }
 
 .header-content h1 {
