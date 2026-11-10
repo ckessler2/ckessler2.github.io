@@ -1,8 +1,8 @@
 :root {
   --bg: #ffffff;
   --panel: #ffffff;
-  --panel-alt: #f4f5f7;
-  --border: #c9d0d8;
+  --panel-alt: #ffffff;
+  --border: #d8dee8;
   --border-strong: #747f8a;
   --text: #17212b;
   --muted: #536373;
@@ -10,9 +10,9 @@
   --control-fill: #efedef;
   --accent-soft: #e4eaef;
   --shadow: 0 14px 36px rgba(18, 35, 52, 0.08);
-  --font-ui: var(--font-ui-serif);
-  --font-ui-sans: "Aptos", "Segoe UI", "Trebuchet MS", sans-serif;
-  --font-ui-serif: "Cambria", "Times New Roman", serif;
+  --font-ui: var(--font-ui-sans);
+  --font-ui-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --font-ui-serif: "Times New Roman", Times, serif;
   --font-mono: "Courier New", monospace;
   --font-size-body: 0.89rem;
   --font-size-small: 0.79rem;
@@ -45,9 +45,7 @@ body {
   margin: 0;
   font-family: var(--font-ui);
   font-size: var(--font-size-body);
-  background:
-    radial-gradient(circle at top left, rgba(255, 107, 107, 0.0125), transparent 31%),
-    linear-gradient(180deg, #f7f8fa 0%, var(--bg) 100%);
+  background: #f5f7fa;
   color: var(--text);
 }
 
@@ -106,6 +104,7 @@ input[type="number"]::-webkit-inner-spin-button {
 
 button {
   cursor: pointer;
+  border-radius: 8px;
 }
 
 .site-shell {
@@ -124,6 +123,7 @@ button {
   border: 1px solid var(--border);
   background: rgba(255, 254, 254, 0.94);
   box-shadow: var(--shadow);
+  border-radius: 10px;
 }
 
 .site-title-row {
@@ -229,6 +229,7 @@ body[data-theme="dark"] .nav-link.is-active {
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
+  border-radius: 10px;
 }
 
 .hero-panel,
@@ -307,6 +308,8 @@ body[data-theme="dark"] .nav-link.is-active {
   border: 1px solid var(--border);
   background: var(--panel);
   box-shadow: var(--shadow);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 .panel {

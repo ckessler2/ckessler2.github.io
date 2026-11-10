@@ -1,7 +1,6 @@
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica,
-    Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     text-transform: none;
     text-align: justify;
     padding: 20px;
@@ -26,12 +25,14 @@ body {
     padding: 1%;
     box-sizing: border-box;
     overflow: hidden;  /* Keeps the background layer within the container bounds */
-}
+    border: 1px solid #d8dee8;
+    border-radius: 10px;
+    }
 
 .background-layer {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgb(219, 219, 219);
+    background-color: rgba(236, 236, 236, 0.92);
     z-index: 1;
 }
 
@@ -77,7 +78,7 @@ body {
 
 
 header {
-    background-color: rgba(158, 152, 152, 0.2); /* Set background color and opacity */
+    background-color: rgba(236, 236, 236, 0.92); /* Set background color and opacity */
     padding: 10px; /* Add padding around the text */
     width: 500px; /* Control the width of the content box */
     backdrop-filter: blur(8px) brightness(1.01); /* Apply blur effect */
@@ -85,57 +86,72 @@ header {
 }
 
 .header-content {
-    display: flex; /* Activates flexbox layout */
-    justify-content: space-around; /* Aligns children elements to the space between */
-    align-items: center; /* Vertically centers the items in the flex container */
-    width: 73%; /* Full width of their parent element */
-    padding: 0 20px;
+    width: 100%;
+    box-sizing: border-box;
+    max-width: 700px;
+    padding: 12px 20px;
+    border: 1px solid #d8dee8;
+    border-radius: 10px;
+    background-color: rgba(236, 236, 236, 0.92);
 }
 
-
-.contact-info p {
+.header-content h1 {
     margin: 0;
-    margin-top: 5px;
-    margin-left: 0px;
-    padding: 2px 0; /* Tiny padding for spacing between info lines */
-    color: #333; /* Dark grey text color */
-    font-size: 14px; /* Smaller font size for contact details */
-    width: 90%; /* Full width of their parent element */
-    padding: 0 20px;
-    text-align: center; /* Ensures centered alignment */
 }
 
-.contact-info > :first-child {
-    margin-top: 25px; /* Adds top margin only to the first element within .contact-info */
+.header-subtitle {
+    margin: 6px 0 12px;
 }
 
-.name-and-links {
-    text-align: center; /* Ensures centered alignment */
-    margin-bottom: 0; /* Removes any bottom margin from the name container */
-    padding-bottom: 0; /* Removes any bottom padding from the name container */
-    width: 100%; /* Full width of their parent element */
-    padding: 0 20px;
+.header-links {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    flex-wrap: wrap;
 }
 
-.name-and-links h1 {
-    margin-bottom: 5px; /* Minimalistic margin to keep tight spacing */
+.header-links a {
+    color: #111;
+    text-decoration: none;
 }
 
-.social-links {
-    margin-top: 0; /* Removes top margin */
-    padding-top: 0; /* Eliminates padding to reduce space */
+.header-links a:hover {
+    text-decoration: underline;
 }
 
-.social-links a {
-    margin: 0 10px; /* Keeps horizontal spacing between icons */
-    color: #333; /* Icon color */
-    font-size: 24px; /* Icon size */
-    text-decoration: none; /* Removes underline/underscore */
+.apps-dropdown {
+    position: relative;
 }
 
-.social-links a:hover {
-    color: #555; /* Changes icon color on hover for visual feedback */
-    text-decoration: none; /* Ensure underline doesn't appear on hover either */
+.apps-dropdown summary {
+    cursor: pointer;
+    list-style: none;
+}
+
+.apps-dropdown summary::-webkit-details-marker {
+    display: none;
+}
+
+.apps-dropdown summary::after {
+    content: " ▾";
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    min-width: 200px;
+    display: none;
+    background: rgba(236, 236, 236, 0.98);
+    border: 1px solid #d8dee8;
+    border-radius: 8px;
+    padding: 8px 10px;
+    z-index: 20;
+}
+
+.apps-dropdown[open] .dropdown-menu {
+    display: grid;
+    gap: 8px;
 }
 
 hr {
