@@ -119,13 +119,10 @@ body {
     flex-wrap: wrap;
 }
 
-.header-links a {
-    color: #111;
+/* All links: standard link blue (also once visited), no underline */
+a {
+    color: LinkText;
     text-decoration: none;
-}
-
-.header-links a:hover {
-    text-decoration: underline;
 }
 
 .apps-dropdown {
@@ -133,6 +130,7 @@ body {
 }
 
 .apps-dropdown summary {
+    color: LinkText; /* same blue as an unvisited link */
     cursor: pointer;
     list-style: none;
 }
