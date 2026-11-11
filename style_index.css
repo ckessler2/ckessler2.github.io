@@ -5,7 +5,7 @@ body {
     text-align: justify;
     padding: 20px;
     width: 100%;  /* Set this to the desired width based on your A4 calculation */
-    max-width: 800px;
+    max-width: 940px;
     margin: 20px auto;
     box-sizing: border-box;
 
@@ -20,7 +20,7 @@ body {
 .main-container {
     position: relative;  /* Base positioning for absolute children */
     width: 100%;
-    max-width: 700px;
+    max-width: 900px;
     margin-top: 30px;
     padding: 1%;
     box-sizing: border-box;
@@ -73,6 +73,7 @@ body {
 
 .text-content {
     grid-area: text;
+    text-align: left;
 }
 
 
@@ -81,7 +82,7 @@ body {
 .header-content {
     width: 100%;
     box-sizing: border-box;
-    max-width: 700px;
+    max-width: 900px;
     padding: 12px 20px;
     border: 1px solid #d8dee8;
     border-radius: 10px;
