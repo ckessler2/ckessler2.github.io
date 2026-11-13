@@ -17,6 +17,7 @@ import {
 import { runQuiescentSimulation } from "../simulation/run-quiescent.js";
 import { renderTrajectoryPlot } from "../plots/trajectory-plot.js";
 import { renderStatePlot } from "../plots/state-plot.js";
+import { createPlateAnimation } from "../plots/plate-animation.js";
 
 function flattenConfig(config) {
   const coeffs = Object.fromEntries(
@@ -113,7 +114,7 @@ function buildModelInfoSection() {
 
   intro.append(
     sourceLink,
-    ", these equations predict 2D quasi-steady aerodynamic forces on free-falling thin plates with differing centre of mass (CoM) locations, and can predict fluttering, tumbling, bounding, gliding and diving. This JavaScript app solves the equations in nondimensional form.",
+    ", these equations predict 2D quasi-steady aerodynamic forces on free-falling thin plates with differing centre of mass (CoM) locations, and can predict fluttering, tumbling, bounding, gliding and diving. This client-side JavaScript app solves the equations in nondimensional form.",
   );
   wrapper.append(summary, intro);
   return wrapper;
@@ -372,6 +373,8 @@ export function renderQuiescentPage({ state, renderMath }) {
     }
   }
 
+  const plateAnimation = createPlateAnimation();
+
   let debugAccordion = buildAccordion(
     state,
     "quiescent-debugging",
@@ -409,6 +412,14 @@ export function renderQuiescentPage({ state, renderMath }) {
         },
       },
     ),
+    buildAccordion(
+      state,
+      "quiescent-animation",
+      "3D animation (work in progress)",
+      plateAnimation.panel,
+      false,
+      { onToggle: (isOpen) => plateAnimation.setOpen(isOpen) },
+    ),
     debugAccordion,
   );
 
@@ -427,6 +438,7 @@ export function renderQuiescentPage({ state, renderMath }) {
   function updatePlots(result) {
     renderTrajectoryPlot(trajectorySection.plot, result);
     renderStatePlot(stateSection.plot, result);
+    plateAnimation.setResult(result, { e_x: state.getState().config.aero.e_x });
 
     const nextDebugAccordion = buildAccordion(
       state,
