@@ -441,7 +441,8 @@ export function renderQuiescentPage({ state, renderMath }) {
   function updatePlots(result) {
     renderTrajectoryPlot(trajectorySection.plot, result);
     renderStatePlot(stateSection.plot, result);
-    plateAnimation.setResult(result, { e_x: state.getState().config.aero.e_x });
+    const latestConfig = state.getState().config;
+    plateAnimation.setResult(result, { e_x: latestConfig.aero.e_x, config: latestConfig });
 
     const nextDebugAccordion = buildAccordion(
       state,

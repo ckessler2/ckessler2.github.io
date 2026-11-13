@@ -9,6 +9,7 @@ const statusEl = document.getElementById("status");
 const previewSvg = document.getElementById("preview");
 
 let latest = null;
+let autoGenerateTimer = null;
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -226,16 +227,27 @@ function downloadTextFile(content, filename, mimeType) {
   return filename;
 }
 
+function formatRuntimeMs(runtimeMs) {
+  if (!Number.isFinite(runtimeMs) || runtimeMs <= 0) {
+    return "0";
+  }
+
+  return Number(runtimeMs).toPrecision(3);
+}
+
 function handleGenerate() {
+  const startTime = performance.now();
+
   try {
     const params = parseInputs();
     const { points, outerRadius } = sampleBoundary(params);
+    const runtimeMs = performance.now() - startTime;
     updatePreview(points, outerRadius);
     latest = { params, points };
     exportButton.disabled = false;
     exportSvgButton.disabled = false;
     setStatus(
-      `Generated outline: D=${params.diameter} mm, W=${params.width} mm, N=${params.count}.`,
+      `Generated in ${formatRuntimeMs(runtimeMs)} ms: D=${params.diameter} mm, W=${params.width} mm, N=${params.count}.`,
     );
   } catch (error) {
     latest = null;
@@ -244,6 +256,11 @@ function handleGenerate() {
     previewSvg.replaceChildren();
     setStatus(error instanceof Error ? error.message : "Failed to generate outline.", true);
   }
+}
+
+function scheduleAutoGenerate() {
+  window.clearTimeout(autoGenerateTimer);
+  autoGenerateTimer = window.setTimeout(handleGenerate, 120);
 }
 
 function handleExport() {
@@ -281,3 +298,10 @@ function handleExportSvg() {
 generateButton.addEventListener("click", handleGenerate);
 exportButton.addEventListener("click", handleExport);
 exportSvgButton.addEventListener("click", handleExportSvg);
+
+for (const input of [diameterInput, widthInput, countInput, svgSolidInput]) {
+  input.addEventListener("input", scheduleAutoGenerate);
+  input.addEventListener("change", scheduleAutoGenerate);
+}
+
+handleGenerate();

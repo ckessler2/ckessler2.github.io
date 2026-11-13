@@ -1,3 +1,5 @@
+import { nondimFreelyFallingPlate } from "../simulation/nondim-falling-plate-quiescent.js";
+
 // 3D animation of the falling plate, replaying a finished simulation result.
 //
 // Self-contained: three.js is loaded from a CDN the first time the view is
@@ -8,7 +10,7 @@
 // Usage:
 //   const anim = createPlateAnimation();
 //   container.append(anim.panel);
-//   anim.setResult(result, { e_x });   // after each simulation run
+//   anim.setResult(result, { e_x, config });   // after each simulation run
 //   anim.setOpen(true / false);        // when the view is shown / hidden
 
 // jsDelivr's +esm builds rewrite each addon's `import "three"` to this same
@@ -31,13 +33,20 @@ const FOLLOW_BASE_DISTANCE = 5.4; // chords
 
 const PLATE_CHORD = 1; // lengths are nondimensionalised by the plate length
 const PLATE_SPAN = 2;
-const PLATE_THICKNESS = 0.03;
+const PLATE_THICKNESS = 0.003;
 const FIELD_OF_VIEW = 45;
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10];
 const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 10;
 const ZOOM_SLIDER_STEPS = 100; // slider runs -100..100, i.e. 10^-1 .. 10^1
 const TIME_SLIDER_RESOLUTION = 1000;
+const FORCE_ARROW_SCALE = 1.4;
+const ACCEL_ARROW_SCALE = 3.2;
+const MIN_ARROW_LENGTH = 0.2;
+const MAX_ARROW_LENGTH = 2.6;
+const COM_ICON_SIZE = 0.16;
+const SIDE_ON_AZIMUTH = 0;
+const SIDE_ON_ZENITH = 90;
 
 const VIEW_MODES = {
   follow: ["follow"],
@@ -55,8 +64,14 @@ const settings = {
   speed: 5, // one of SPEED_OPTIONS
   projection: "orthographic", // "perspective" | "orthographic"
   cameras: structuredClone(DEFAULT_CAMERAS),
+  lockSideOn2D: false,
   showCameraInfo: false,
+  showComMarker: true,
+  showForceArrow: false,
+  showAccelerationArrow: false,
   lineStyle: "dashed", // "solid" | "dashed" | "hidden"
+  plateColor: null,
+  plateOpacity: 0.5,
   lineColor: "#000000",
   lineWidth: 1, // CSS px
   showGrid: false,
@@ -139,7 +154,14 @@ function sampleResult(result, time) {
   const span = t[j] - t[i];
   const f = span > 0 ? clamp((time - t[i]) / span, 0, 1) : 0;
   const lerp = (values) => values[i] + (values[j] - values[i]) * f;
-  return { x: lerp(states.x), y: lerp(states.y), theta: lerp(states.theta) };
+  return {
+    x: lerp(states.x),
+    y: lerp(states.y),
+    theta: lerp(states.theta),
+    v_xp: lerp(states.v_xp),
+    v_yp: lerp(states.v_yp),
+    omega: lerp(states.omega),
+  };
 }
 
 function pathBounds(result) {
@@ -164,6 +186,13 @@ function pathBounds(result) {
     centerX: (minX + maxX) / 2,
     centerY: (minY + maxY) / 2,
     span: Math.max(maxX - minX, maxY - minY, 1),
+  };
+}
+
+function rotateBodyToWorld(vectorX, vectorY, theta) {
+  return {
+    x: vectorX * Math.cos(theta) - vectorY * Math.sin(theta),
+    y: vectorX * Math.sin(theta) + vectorY * Math.cos(theta),
   };
 }
 
@@ -367,6 +396,13 @@ export function createPlateAnimation() {
   const resetCameraButton = createButton("Reset camera");
   resetCameraButton.id = "anim-reset-camera";
   resetCameraButton.style.minWidth = "0";
+  const sideOn2DInput = createCheckbox("anim-side-on-2d", settings.lockSideOn2D);
+  const comMarkerInput = createCheckbox("anim-com-marker", settings.showComMarker);
+  const forceArrowInput = createCheckbox("anim-force-arrow", settings.showForceArrow);
+  const accelerationArrowInput = createCheckbox(
+    "anim-acceleration-arrow",
+    settings.showAccelerationArrow,
+  );
 
   const lineStyleInput = createSelect(
     "anim-line-style",
@@ -377,6 +413,9 @@ export function createPlateAnimation() {
     ],
     settings.lineStyle,
   );
+  const plateColorPicker = createColorPicker("anim-plate-color");
+  const plateOpacityRange = createRange("anim-plate-opacity", { min: 0, max: 1, step: 0.05 });
+  plateOpacityRange.input.value = String(settings.plateOpacity);
   const lineColorPicker = createColorPicker("anim-line-color");
   const lineWidthRange = createRange("anim-line-width", { min: 0.5, max: 8, step: 0.5 });
   lineWidthRange.input.value = String(settings.lineWidth);
@@ -393,6 +432,14 @@ export function createPlateAnimation() {
     createSettingRow("Zoom (fixed)", zoomRanges.fixed.control, zoomRanges.fixed.input.id),
     createSettingRow("Show camera info", cameraInfoInput),
     createSettingRow("", resetCameraButton, null),
+    createSettingRow("2D side-on lock (az 0°, zen 90°)", sideOn2DInput),
+    createSettingHeading("Overlays"),
+    createSettingRow("Show CoM icon", comMarkerInput),
+    createSettingRow("Show force arrow", forceArrowInput),
+    createSettingRow("Show acceleration arrow", accelerationArrowInput),
+    createSettingHeading("Plate"),
+    createSettingRow("Colour", plateColorPicker.control, plateColorPicker.input.id),
+    createSettingRow("Opacity", plateOpacityRange.control, plateOpacityRange.input.id),
     createSettingHeading("Trajectory line"),
     createSettingRow("Style", lineStyleInput),
     createSettingRow("Colour", lineColorPicker.control, lineColorPicker.input.id),
@@ -417,6 +464,7 @@ export function createPlateAnimation() {
   let disposed = false;
   let initPromise = null;
   let bounds = { centerX: 0, centerY: 0, span: 1 };
+  let simConfig = null;
 
   // three.js objects, created lazily in init().
   let lib = null;
@@ -426,9 +474,14 @@ export function createPlateAnimation() {
   let views = []; // one per visible camera, see createView()
   let plateGroup = null;
   let plateMesh = null;
+  let plateSurfaceMaterial = null;
+  let comMarker = null;
+  let comMarkerTexture = null;
   let pathLine = null;
   let pathMaterial = null;
   let grid = null;
+  let forceArrow = null;
+  let accelerationArrow = null;
   let resizeObserver = null;
 
   function endTime() {
@@ -447,8 +500,13 @@ export function createPlateAnimation() {
   }
 
   function syncColorPickers() {
+    plateColorPicker.input.value = toHexColor(settings.plateColor ?? colors.plate);
     lineColorPicker.input.value = toHexColor(settings.lineColor ?? colors.path);
     backgroundPicker.input.value = toHexColor(settings.background ?? colors.background);
+  }
+
+  function syncPlateOpacityText() {
+    plateOpacityRange.valueText.textContent = `${Math.round(Number(settings.plateOpacity) * 100)}%`;
   }
 
   function syncLineWidthText() {
@@ -507,6 +565,7 @@ export function createPlateAnimation() {
 
     const controls = new lib.OrbitControls(camera, element);
     controls.enableDamping = true;
+    controls.enableRotate = !settings.lockSideOn2D;
     controls.minZoom = MIN_ZOOM;
     controls.maxZoom = MAX_ZOOM;
 
@@ -585,11 +644,40 @@ export function createPlateAnimation() {
     const zoom = isOrthographic(view)
       ? view.camera.zoom
       : view.baseDistance / Math.max(spherical.radius, 1e-9);
+
+    if (settings.lockSideOn2D) {
+      settings.cameras[view.mode] = {
+        azimuth: SIDE_ON_AZIMUTH,
+        zenith: SIDE_ON_ZENITH,
+        zoom,
+      };
+      updateCameraReadouts();
+      return;
+    }
+
     settings.cameras[view.mode] = {
       azimuth: THREE.MathUtils.radToDeg(spherical.theta),
       zenith: THREE.MathUtils.radToDeg(spherical.phi),
       zoom,
     };
+    updateCameraReadouts();
+  }
+
+  function applySideOnLock() {
+    if (settings.lockSideOn2D) {
+      for (const mode of Object.keys(settings.cameras)) {
+        settings.cameras[mode].azimuth = SIDE_ON_AZIMUTH;
+        settings.cameras[mode].zenith = SIDE_ON_ZENITH;
+      }
+    }
+
+    for (const view of views) {
+      view.controls.enableRotate = !settings.lockSideOn2D;
+      if (settings.lockSideOn2D) {
+        positionCamera(view);
+      }
+    }
+
     updateCameraReadouts();
   }
 
@@ -662,7 +750,7 @@ export function createPlateAnimation() {
     views = VIEW_MODES[settings.viewMode].map(createView);
     layoutViews();
     views.forEach(placeCamera);
-    updateCameraReadouts();
+    applySideOnLock();
   }
 
   // ---- Scene construction --------------------------------------------------------------
@@ -677,14 +765,66 @@ export function createPlateAnimation() {
     });
   }
 
+  function createComIconTexture() {
+    const size = 256;
+    const center = size / 2;
+    const radius = size * 0.46;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return null;
+    }
+
+    ctx.clearRect(0, 0, size, size);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.arc(center, center, radius, -Math.PI / 2, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(center, center);
+    ctx.arc(center, center, radius, Math.PI / 2, Math.PI);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#000000";
+    ctx.lineWidth = Math.round(size * 0.04);
+    ctx.beginPath();
+    ctx.arc(center, center, radius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    return texture;
+  }
+
   function buildPlate() {
     plateGroup = new THREE.Group(); // origin at the centre of mass
 
     // The geometric centre sits -e_x along the chord from the CoM (matching the
     // `v_yp - omega * e_x` term in the model), so the plate pivots about its CoM.
+    plateSurfaceMaterial = new THREE.MeshStandardMaterial({
+      color: colors.plate,
+      roughness: 0.55,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 1,
+    });
     plateMesh = new THREE.Mesh(
       new THREE.BoxGeometry(PLATE_CHORD, PLATE_THICKNESS, PLATE_SPAN),
-      new THREE.MeshStandardMaterial({ color: colors.plate, roughness: 0.55, metalness: 0.1 }),
+      plateSurfaceMaterial,
     );
     plateMesh.add(
       new THREE.LineSegments(
@@ -694,14 +834,52 @@ export function createPlateAnimation() {
     );
     plateGroup.add(plateMesh);
 
-    const comMarker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.04, 16, 12),
-      new THREE.MeshBasicMaterial({ color: colors.marker }),
+    comMarkerTexture = createComIconTexture();
+    comMarker = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: comMarkerTexture,
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        toneMapped: false,
+      }),
     );
-    comMarker.position.z = PLATE_SPAN / 2 + 0.02;
+    comMarker.scale.set(COM_ICON_SIZE, COM_ICON_SIZE, 1);
+    comMarker.renderOrder = 50;
     plateGroup.add(comMarker);
 
+    forceArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+      MIN_ARROW_LENGTH,
+      0x2e7d32,
+    );
+    forceArrow.visible = false;
+
+    accelerationArrow = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 1, 0),
+      new THREE.Vector3(0, 0, 0),
+      MIN_ARROW_LENGTH,
+      0x9c27b0,
+    );
+    accelerationArrow.visible = false;
+
     scene.add(plateGroup);
+    scene.add(forceArrow);
+    scene.add(accelerationArrow);
+    applyPlateStyle();
+  }
+
+  function applyPlateStyle() {
+    if (!plateSurfaceMaterial) {
+      return;
+    }
+
+    const opacity = clamp(Number(settings.plateOpacity), 0, 1);
+    plateSurfaceMaterial.color.set(settings.plateColor ?? colors.plate);
+    plateSurfaceMaterial.opacity = opacity;
+    plateSurfaceMaterial.transparent = opacity < 0.999;
+    plateSurfaceMaterial.needsUpdate = true;
   }
 
   function applyPathStyle() {
@@ -725,6 +903,78 @@ export function createPlateAnimation() {
   function applyBackground() {
     if (scene) {
       scene.background.set(settings.background ?? colors.background);
+    }
+  }
+
+  function applyOverlayVisibility() {
+    if (comMarker) {
+      comMarker.visible = settings.showComMarker;
+    }
+
+    if (forceArrow) {
+      forceArrow.visible = settings.showForceArrow && Boolean(result) && Boolean(simConfig);
+    }
+
+    if (accelerationArrow) {
+      accelerationArrow.visible =
+        settings.showAccelerationArrow && Boolean(result) && Boolean(simConfig);
+    }
+  }
+
+  function updateArrow(arrow, vectorX, vectorY, originX, originY, scale) {
+    if (!arrow) {
+      return;
+    }
+
+    if (!Number.isFinite(vectorX) || !Number.isFinite(vectorY)) {
+      arrow.visible = false;
+      return;
+    }
+
+    const magnitude = Math.hypot(vectorX, vectorY);
+    if (!(magnitude > 1e-12)) {
+      arrow.visible = false;
+      return;
+    }
+
+    const length = clamp(magnitude * scale, MIN_ARROW_LENGTH, MAX_ARROW_LENGTH);
+    const dir = new THREE.Vector3(vectorX / magnitude, vectorY / magnitude, 0);
+    const headLength = Math.min(0.45, Math.max(0.15, length * 0.3));
+    const headWidth = Math.min(0.25, Math.max(0.09, length * 0.18));
+
+    arrow.position.set(originX, originY, 0);
+    arrow.setDirection(dir);
+    arrow.setLength(length, headLength, headWidth);
+    arrow.visible = true;
+  }
+
+  function updateDynamicVectors(sample, time) {
+    const showAnyVector = settings.showForceArrow || settings.showAccelerationArrow;
+    if (!showAnyVector || !simConfig || !result) {
+      return;
+    }
+
+    const stateVector = [sample.v_xp, sample.v_yp, sample.omega, sample.theta, sample.x, sample.y];
+    const [dv_xpdt, dv_ypdt] = nondimFreelyFallingPlate(time, stateVector, simConfig);
+
+    const accelWorld = rotateBodyToWorld(dv_xpdt, dv_ypdt, sample.theta);
+    const forceBodyX = simConfig.model.m_prime * dv_xpdt;
+    const forceBodyY = (simConfig.model.m_prime + 1) * dv_ypdt;
+    const forceWorld = rotateBodyToWorld(forceBodyX, forceBodyY, sample.theta);
+
+    if (settings.showForceArrow) {
+      updateArrow(forceArrow, forceWorld.x, forceWorld.y, sample.x, sample.y, FORCE_ARROW_SCALE);
+    }
+
+    if (settings.showAccelerationArrow) {
+      updateArrow(
+        accelerationArrow,
+        accelWorld.x,
+        accelWorld.y,
+        sample.x,
+        sample.y,
+        ACCEL_ARROW_SCALE,
+      );
     }
   }
 
@@ -771,6 +1021,7 @@ export function createPlateAnimation() {
     grid.position.set(Math.round(bounds.centerX), Math.round(bounds.centerY), -PLATE_SPAN);
     scene.add(grid);
     applyGridVisibility();
+    applyOverlayVisibility();
 
     views.forEach(placeCamera);
   }
@@ -841,9 +1092,11 @@ export function createPlateAnimation() {
       timeSlider.value = String(Math.round((playTime / (endTime() || 1)) * TIME_SLIDER_RESOLUTION));
     }
 
-    const { x, y, theta } = sampleResult(result, playTime);
+    const sample = sampleResult(result, playTime);
+    const { x, y, theta } = sample;
     plateGroup.position.set(x, y, 0);
     plateGroup.rotation.z = theta; // body x' axis is at angle theta from lab x
+    updateDynamicVectors(sample, playTime);
 
     for (const view of views) {
       if (view.mode === "follow") {
@@ -932,7 +1185,43 @@ export function createPlateAnimation() {
   resetCameraButton.addEventListener("click", () => {
     settings.cameras = structuredClone(DEFAULT_CAMERAS);
     views.forEach(placeCamera);
-    updateCameraReadouts();
+    applySideOnLock();
+  });
+
+  sideOn2DInput.addEventListener("change", () => {
+    settings.lockSideOn2D = sideOn2DInput.checked;
+    applySideOnLock();
+  });
+
+  comMarkerInput.addEventListener("change", () => {
+    settings.showComMarker = comMarkerInput.checked;
+    applyOverlayVisibility();
+  });
+
+  forceArrowInput.addEventListener("change", () => {
+    settings.showForceArrow = forceArrowInput.checked;
+    applyOverlayVisibility();
+  });
+
+  accelerationArrowInput.addEventListener("change", () => {
+    settings.showAccelerationArrow = accelerationArrowInput.checked;
+    applyOverlayVisibility();
+  });
+
+  plateColorPicker.input.addEventListener("input", () => {
+    settings.plateColor = plateColorPicker.input.value;
+    applyPlateStyle();
+  });
+  plateColorPicker.reset.addEventListener("click", () => {
+    settings.plateColor = null;
+    syncColorPickers();
+    applyPlateStyle();
+  });
+
+  plateOpacityRange.input.addEventListener("input", () => {
+    settings.plateOpacity = clamp(Number(plateOpacityRange.input.value), 0, 1);
+    syncPlateOpacityText();
+    applyPlateStyle();
   });
 
   lineStyleInput.addEventListener("change", () => {
@@ -972,12 +1261,14 @@ export function createPlateAnimation() {
   });
 
   // ---- Public API ----------------------------------------------------------------------
-  function setResult(nextResult, { e_x: nextEx = 0 } = {}) {
+  function setResult(nextResult, { e_x: nextEx = 0, config: nextConfig = null } = {}) {
     result = nextResult ?? null;
     e_x = Number(nextEx) || 0;
+    simConfig = nextConfig ? structuredClone(nextConfig) : null;
     playTime = 0;
     timeSlider.value = "0";
     updateTimeReadout();
+    applyOverlayVisibility();
     if (renderer) {
       buildPathObjects();
     }
@@ -1010,7 +1301,10 @@ export function createPlateAnimation() {
     if (scene) {
       pathLine?.geometry.dispose();
       pathMaterial?.dispose();
+      comMarkerTexture?.dispose();
       disposeObject(grid);
+      disposeObject(forceArrow);
+      disposeObject(accelerationArrow);
       disposeObject(plateGroup);
     }
     if (renderer) {
@@ -1025,6 +1319,7 @@ export function createPlateAnimation() {
 
   syncSettingsPanel();
   syncColorPickers();
+  syncPlateOpacityText();
   syncLineWidthText();
   updateCameraReadouts();
   updateTimeReadout();

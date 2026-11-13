@@ -57,6 +57,11 @@ body {
         "image text";
     column-gap: 20px;
     align-items: start;
+    margin: 12px 0 18px;
+    padding: 14px;
+    border: 1px solid #d8dee8;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.5);
 }
 
 .conference-proceeding .image {
@@ -189,9 +194,16 @@ hr {
         padding-left: 130px;
     }
     .conference-proceeding {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        grid-template-areas:
+            "image title"
+            "image text";
+        column-gap: 12px;
+        align-items: start;
+    }
+    .conference-proceeding .image {
+        width: 84px;
     }
     .conference-proceeding .text-content p {
         margin-top: 0;
