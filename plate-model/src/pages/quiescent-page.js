@@ -386,17 +386,11 @@ export function renderQuiescentPage({ state, renderMath }) {
   resultsAccordionGroup.append(
     buildAccordion(
       state,
-      "quiescent-trajectory",
-      "Trajectory plot",
-      trajectorySection.panel,
+      "quiescent-animation",
+      "3D animation (work in progress)",
+      plateAnimation.panel,
       true,
-      {
-        onToggle: (isOpen) => {
-          if (isOpen) {
-            window.requestAnimationFrame(refreshPlots);
-          }
-        },
-      },
+      { onToggle: (isOpen) => plateAnimation.setOpen(isOpen) },
     ),
     buildAccordion(
       state,
@@ -414,14 +408,23 @@ export function renderQuiescentPage({ state, renderMath }) {
     ),
     buildAccordion(
       state,
-      "quiescent-animation",
-      "3D animation (work in progress)",
-      plateAnimation.panel,
+      "quiescent-trajectory",
+      "Trajectory plot",
+      trajectorySection.panel,
       false,
-      { onToggle: (isOpen) => plateAnimation.setOpen(isOpen) },
+      {
+        onToggle: (isOpen) => {
+          if (isOpen) {
+            window.requestAnimationFrame(refreshPlots);
+          }
+        },
+      },
     ),
     debugAccordion,
   );
+
+  // Start the animation straight away if its accordion begins open.
+  plateAnimation.setOpen(getAccordionOpen(state, "quiescent-animation", true));
 
   results.append(resultsAccordionGroup);
   layout.append(controls, results);
