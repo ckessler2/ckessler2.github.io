@@ -13,6 +13,7 @@ export async function runVnnlibCheck({ tf, model, checker, spec, settings, onPro
   const t0 = performance.now();
   const { seed, restarts, steps } = settings;
   const alpha = settings.alpha ?? defaultAlpha(steps);
+  const schedule = settings.schedule ?? "constant";
 
   if (spec.numInputs !== model.inputSize) {
     throw new Error(`The property declares ${spec.numInputs} inputs (X_i) but the model takes ${model.inputSize}.`);
@@ -72,6 +73,7 @@ export async function runVnnlibCheck({ tf, model, checker, spec, settings, onPro
         restarts,
         steps,
         alpha,
+        schedule,
         rng,
         isCandidate: (m) => m <= 0,
         onCandidate: async (x) => {
@@ -115,7 +117,7 @@ export async function runVnnlibCheck({ tf, model, checker, spec, settings, onPro
     spuriousCandidates: spurious,
     selfTest: test,
     regions: spec.regions.length,
-    settings: { ...settings, alpha },
+    settings: { ...settings, alpha, schedule },
     disclaimer: DISCLAIMER,
   };
 }

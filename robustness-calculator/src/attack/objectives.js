@@ -77,3 +77,26 @@ export function createLipschitzLoss(tf, xRef, yRef, minDist) {
     },
   };
 }
+
+/**
+ * Targeted classification margin, for a batch built with `copies` = number
+ * of wrong classes: row i aims at target class targets[i % copies] and
+ * minimises (true logit − target logit). < 0 means that target now beats the
+ * true class (misclassified).
+ */
+export function createTargetedClassificationLoss(tf, label, numOutputs) {
+  const targets = [];
+  for (let j = 0; j < numOutputs; j++) if (j !== label) targets.push(j);
+  return {
+    copies: targets.length,
+    lossFn: (y) => {
+      const B = y.shape[0];
+      const t = Int32Array.from({ length: B }, (_, i) => targets[i % targets.length]);
+      const mask = tf.oneHot(tf.tensor1d(t, "int32"), numOutputs);
+      const targetLogit = tf.sum(tf.mul(y, mask), 1);
+      const trueLogit = tf.squeeze(tf.slice(y, [0, label], [B, 1]), [1]);
+      return tf.sub(trueLogit, targetLogit);
+    },
+    dispose() {},
+  };
+}

@@ -35,7 +35,11 @@ export function createFileInput({ accept, label, fileName, onFile }) {
     if (file) await onFile(file);
   });
 
-  row.append(input);
+  const heading = document.createElement("strong");
+  heading.className = "file-row-label";
+  heading.textContent = label;
+
+  row.append(heading, input);
   if (fileName) {
     const current = document.createElement("span");
     current.className = "section-note";

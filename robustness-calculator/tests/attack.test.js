@@ -147,12 +147,35 @@ test("regression: maximum deviation and Lipschitz lower bound match the hand cal
   assert.equal(lip.rows[0].pass, true);
 });
 
-test("shipped examples: sat example is found, unsat example is never reported sat", async () => {
-  const { readFileSync } = await import("node:fs");
-  const ex = (f) => new URL(`../examples/${f}`, import.meta.url);
-  const bytes = new Uint8Array(readFileSync(ex("tiny-relu.onnx")));
-  const sat = await check(bytes, readFileSync(ex("tiny-relu-sat.vnnlib"), "utf8"), { ...settings, restarts: 100, steps: 100 });
-  assert.equal(sat.verdict, "sat");
-  const unsat = await check(bytes, readFileSync(ex("tiny-relu-unsat.vnnlib"), "utf8"), { ...settings, restarts: 100, steps: 100 });
-  assert.equal(unsat.verdict, "unknown");
+test("APGD checkpoints follow the published schedule", async () => {
+  const { apgdCheckpoints } = await import("../src/attack/pgd.js");
+  // p = 0, 0.22, 0.41, 0.57, 0.70, 0.80, 0.87, 0.93, 0.99 (Croce & Hein, 2020)
+  assert.deepEqual(apgdCheckpoints(100), [22, 41, 57, 70, 80, 87, 93, 99]);
+  assert.ok(apgdCheckpoints(20).every((k) => k > 0 && k < 20));
+});
+
+test("APGD schedule: finds counterexamples that exist, never reports one that doesn't", async () => {
+  const s = { ...settings, schedule: "apgd" };
+  assert.equal((await check(reluDiff, prop("(assert (>= Y_0 0.999))"), s)).verdict, "sat");
+  for (const body of ["(assert (>= Y_0 1.0001))", "(assert (> Y_0 1))"]) {
+    const r = await check(reluDiff, prop(body), s);
+    assert.equal(r.verdict, "unknown", body);
+  }
+  const a = await check(reluDiff, prop("(assert (>= Y_0 0.95))"), s);
+  const b = await check(reluDiff, prop("(assert (>= Y_0 0.95))"), s);
+  assert.deepEqual(a.counterexample, b.counterexample);
+});
+
+test("targeted and APGD classification attacks give the hand-calculated answers", async () => {
+  const { model: m, checker } = await load(identity2);
+  const points = { inputs: [[0.6, 0.4], [0.3, 0.7], [0.9, 0.1]], labels: [0, 0, 0] };
+  for (const extra of [{ targeted: true }, { schedule: "apgd" }, { targeted: true, schedule: "apgd" }]) {
+    const r = await runPointsCheck({
+      tf, model: m, checker, points,
+      settings: { ...settings, ...extra, task: "classification", epsilon: 0.15, searchEpsilon: true, searchIterations: 10 },
+    });
+    const [p0, , p2] = r.rows;
+    assert.ok(p0.broken && p0.smallestEpsilon >= 0.1 && p0.smallestEpsilon < 0.1 + 0.15 / 2 ** 9, JSON.stringify(extra));
+    assert.equal(p2.broken, false, JSON.stringify(extra));
+  }
 });

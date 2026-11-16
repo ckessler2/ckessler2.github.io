@@ -1,5 +1,5 @@
-/* Shared look with ../plate-model/style.css (tokens, header, panels, accordions,
-   fields). App-specific rules are at the end. */
+/* Shared look with ../plate-model/style.css (tokens, header, panels,
+   accordions, fields). App-specific rules are at the end. */
 
 :root {
   --bg: #ffffff;
@@ -11,7 +11,6 @@
   --muted: #536373;
   --accent: #ff6b6b;
   --control-fill: #efedef;
-  --accent-soft: #e4eaef;
   --shadow: 0 14px 36px rgba(18, 35, 52, 0.08);
   --font-ui: var(--font-ui-sans);
   --font-ui-sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
@@ -27,15 +26,7 @@
   --pad-button-x: 10px;
   --pad-nav-y: 9px;
   --pad-nav-x: 9px;
-  --plot-paper: #ffffff;
-  --plot-bg: #ffffff;
-  --plot-text: #17212b;
-  --plot-axis: #17212b;
   --plot-trajectory: #0f5b78;
-  --plot-state-1: #0f5b78;
-  --plot-state-2: #ff7f11;
-  --plot-state-3: #2e7d32;
-  --plot-state-4: #9c27b0;
 }
 
 * {
@@ -72,17 +63,8 @@ body[data-theme="dark"] {
   --text: #f3f5f7;
   --muted: #c6ced8;
   --control-fill: #2d2f33;
-  --accent-soft: #2c2f33;
   --shadow: 0 14px 36px rgba(0, 0, 0, 0.28);
-  --plot-paper: #1c2025;
-  --plot-bg: #1c2025;
-  --plot-text: #f3f5f7;
-  --plot-axis: #f3f5f7;
   --plot-trajectory: #5ec8ff;
-  --plot-state-1: #5ec8ff;
-  --plot-state-2: #ffb347;
-  --plot-state-3: #6dff8b;
-  --plot-state-4: #d78cff;
   background:
     radial-gradient(circle at top left, rgba(255, 107, 107, 0.02), transparent 33%),
     linear-gradient(180deg, #1c1e22 0%, var(--bg) 100%);
@@ -139,7 +121,6 @@ button {
 }
 
 body[data-theme="dark"] .site-header,
-body[data-theme="dark"] .hero-panel,
 body[data-theme="dark"] .panel,
 body[data-theme="dark"] .page-card {
   background: rgba(29, 31, 35, 0.96);
@@ -220,7 +201,6 @@ body[data-theme="dark"] .nav-link.is-active {
   gap: 20px;
 }
 
-.hero-panel,
 .panel,
 .page-card {
   background: rgba(255, 255, 255, 0.96);
@@ -229,20 +209,17 @@ body[data-theme="dark"] .nav-link.is-active {
   border-radius: 10px;
 }
 
-.hero-panel,
 .page-card {
   padding: var(--pad-page);
 }
 
 .page-card h2:first-child,
-.hero-panel h2:first-child,
 .panel h2:first-child,
 .panel h3:first-child {
   margin-top: 0;
 }
 
 .page-card p,
-.hero-panel p,
 .panel p,
 .panel li,
 .panel label,
@@ -262,7 +239,6 @@ body[data-theme="dark"] .nav-link.is-active {
 }
 
 .page-card p,
-.hero-panel p,
 .panel p,
 .panel li {
   line-height: 1.55;
@@ -319,8 +295,7 @@ body[data-theme="dark"] .nav-link.is-active {
   flex-wrap: wrap;
 }
 
-.toolbar-main,
-.toolbar-meta {
+.toolbar-main {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -344,9 +319,7 @@ body[data-theme="dark"] .nav-link.is-active {
   font-weight: 700;
 }
 
-.muted-text,
 .status,
-.kicker,
 .section-note {
   color: var(--muted);
 }
@@ -354,13 +327,6 @@ body[data-theme="dark"] .nav-link.is-active {
 .status {
   margin: 0;
   white-space: nowrap;
-}
-
-.kicker {
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.8rem;
-  margin: 0;
 }
 
 .accordion {
@@ -410,22 +376,6 @@ body[data-theme="dark"] .nav-link.is-active {
   padding: calc(var(--pad-block-y) + 5px) calc(var(--pad-block-x) + 5px) calc(var(--pad-block-x) + 5px);
 }
 
-.section-block {
-  display: grid;
-  gap: 10px;
-}
-
-.section-block + .section-block {
-  padding-top: 12px;
-  border-top: 1px solid var(--border);
-}
-
-.section-heading {
-  margin: 0;
-  font-size: var(--font-size-body);
-  font-weight: 400;
-}
-
 .field-grid {
   display: grid;
   gap: 10px;
@@ -437,10 +387,6 @@ body[data-theme="dark"] .nav-link.is-active {
   grid-template-columns: minmax(0, 1fr) minmax(62px, 88px);
   gap: 8px;
   align-items: center;
-}
-
-.section-block-wide-inputs .field {
-  grid-template-columns: minmax(0, 1fr) minmax(72px, 98px);
 }
 
 .field-wide {
@@ -501,19 +447,10 @@ body[data-theme="dark"] .field select {
   background: #22272d;
 }
 
-.checkbox-row {
-  display: grid;
-  gap: 10px;
-}
-
 .checkbox {
   display: inline-flex;
   gap: 8px;
   align-items: center;
-}
-
-.checkbox-reversed input {
-  margin-left: 2px;
 }
 
 .mono {
@@ -592,7 +529,6 @@ body[data-theme="dark"] .field select {
   }
 
   .site-header,
-  .hero-panel,
   .page-card,
   .panel {
     padding: var(--pad-panel);
@@ -747,10 +683,6 @@ body[data-theme="dark"] {
   color: var(--bad);
 }
 
-.data-table .cell-ok {
-  color: var(--ok);
-}
-
 .histogram {
   width: 100%;
   height: auto;
@@ -830,4 +762,8 @@ body[data-theme="dark"] {
 
 .histogram {
   max-width: 560px;
+}
+
+.file-row-label {
+  font-size: var(--font-size-body);
 }

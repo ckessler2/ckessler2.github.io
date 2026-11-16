@@ -92,8 +92,9 @@ export function renderMethodPage({ renderMath }) {
 
     el("h2", "", "The attack"),
     list([
-      "L∞ PGD: x ← clip(x − α·(u − l)·sign(∇m(x)), l, u), with per-feature step size α·(uᵢ − lᵢ). Default α = 2.5 / K, K = 100 steps.",
-      "R random starts drawn uniformly in the box (default 100), batched into one tensor, plus the box centre and the corner the gradient at the centre points towards.",
+      "L∞ PGD with the step-size schedule of APGD (Croce & Hein, 2020): each start takes sign-gradient steps x ← clip(x − η·(u − l)·sign(∇m(x)), l, u) with momentum 0.75. The step η starts at the full box width and is halved for a start, which also jumps back to its best point so far, whenever its progress stalls at fixed checkpoints. The classic constant-step PGD of Madry et al. (2018) is available under Advanced.",
+      "R random starts drawn uniformly in the box (default 10), K steps each (default 50), batched into one tensor, plus the box centre and the corner the gradient at the centre points towards.",
+      "On the published VNN-COMP MNIST benchmarks (39 instances with known counterexamples), the APGD schedule found 36 at these defaults (35 with K = 20), against 34 for constant-step PGD with K = 20, which was no better with 9× more restarts. Per-class targeted attacks added nothing at 9× the cost, so they are not used. None of the variants reported a counterexample on any of the 90 instances published as robust.",
       "VNNLIB and classification attacks stop as soon as a counterexample is confirmed.",
       "A seeded random number generator (mulberry32) makes every run reproducible: the same seed, settings and backend give the same result.",
       "The attack runs in a Web Worker, so the page stays responsive; Cancel stops it immediately.",

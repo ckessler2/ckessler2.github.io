@@ -6,21 +6,10 @@ import { createEpsilonHistogram } from "../components/histogram.js";
 import { downloadTextFile } from "../components/download.js";
 import { parseVnnlib } from "../spec/vnnlib.js";
 import { TASKS } from "../spec/points.js";
+import { BENCHMARK, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
 import { DISCLAIMER } from "../attack/report.js";
 import { TFJS_VERSION, ORT_VERSION } from "../lib/cdn.js";
 
-const EXAMPLES = {
-  vnnlib: {
-    label: "Example: VNNLIB property",
-    model: "examples/tiny-relu.onnx",
-    spec: "examples/tiny-relu-sat.vnnlib",
-  },
-  points: {
-    label: "Example: classifier points",
-    model: "examples/mlp-classifier.onnx",
-    points: "examples/mlp-points.csv",
-  },
-};
 
 // DOM nodes the progress callback updates without a full re-render. They are
 // reassigned on every render, so a re-render mid-run (e.g. toggling dark
@@ -32,13 +21,6 @@ function el(tag, className, text) {
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
-}
-
-function sectionBlock(title, ...children) {
-  const block = el("div", "section-block");
-  if (title) block.append(el("h3", "section-heading", title));
-  block.append(...children.filter(Boolean));
-  return block;
 }
 
 function errorText(message) {
@@ -135,21 +117,29 @@ async function fetchBytes(url) {
   return url.endsWith(".gz") ? gunzip(bytes) : bytes;
 }
 
-async function loadExample(ctx, key) {
-  const ex = EXAMPLES[key];
+async function loadBenchmark(ctx) {
   const { state, rerender } = ctx;
-  state.set("mode", key);
+  state.set("mode", "points");
   state.set("run", { status: "idle" });
+  state.set("model", { fileName: BENCHMARK.modelName, loading: true });
+  rerender();
   try {
-    if (key === "vnnlib") {
-      loadSpecText(ctx, ex.spec.split("/").pop(), new TextDecoder().decode(await fetchBytes(ex.spec)));
-    } else {
-      loadPointsText(ctx, ex.points.split("/").pop(), new TextDecoder().decode(await fetchBytes(ex.points)));
-      state.patch("pointsSettings", { task: "classification", epsilon: 0.1, searchEpsilon: true });
-    }
-    await loadModelBytes(ctx, ex.model.split("/").pop(), await fetchBytes(ex.model));
+    const [modelBytes, ...props] = await Promise.all([
+      fetchBytes(BENCHMARK.modelUrl),
+      ...BENCHMARK.propertyUrls.map(fetchBytes),
+    ]);
+    const decoder = new TextDecoder();
+    const points = props.map((b) => pointFromProperty(decoder.decode(b), BENCHMARK.propertyEpsilon, { snap: true }));
+    const csv = pointsCsvText(points, [
+      `${BENCHMARK.label}: 15 MNIST test images and labels, recovered from the benchmark's properties.`,
+      `Source: ${BENCHMARK.modelUrl.replace(/\/onnx\/.*/, "")}`,
+    ]);
+    loadPointsText(ctx, BENCHMARK.pointsName, csv);
+    state.patch("points", { reference: BENCHMARK.reference });
+    state.patch("pointsSettings", { task: "classification", searchEpsilon: false, ...BENCHMARK.settings });
+    await loadModelBytes(ctx, BENCHMARK.modelName, modelBytes);
   } catch (err) {
-    state.set("model", { error: err.message });
+    state.set("model", { error: `Could not load the benchmark: ${err.message}` });
     rerender();
   }
 }
@@ -159,13 +149,14 @@ async function loadExample(ctx, key) {
 
 function renderModelSection(ctx) {
   const { state, rerender } = ctx;
-  const { model } = state.getState();
+  const s = state.getState();
+  const { model } = s;
   const content = el("div", "page-flow");
 
   content.append(
     createFileInput({
       accept: ".onnx,.gz",
-      label: "ONNX model file",
+      label: "Model (.onnx)",
       fileName: model?.fileName,
       onFile: async (file) => {
         try {
@@ -181,62 +172,23 @@ function renderModelSection(ctx) {
   if (model?.loading) content.append(note("Loading the model and the libraries…"));
   if (model?.error) content.append(errorText(model.error));
 
-  const s = model?.summary;
-  if (s) {
-    const ops = Object.entries(s.opCounts)
-      .map(([op, n]) => (n > 1 ? `${op}×${n}` : op))
-      .join(", ");
+  const ms = model?.summary;
+  if (ms) {
     content.append(
-      createStatGrid([
-        { label: "Input", value: `${describeShape(s.declaredInputShape)} → ${s.inputSize} features` },
-        { label: "Output", value: `${s.outputSize} values` },
-        { label: "Parameters", value: s.paramCount.toLocaleString() },
-        { label: "Opset", value: String(s.opset) },
-      ]),
-      note(`Operators: ${ops}`),
+      note(
+        `${describeShape(ms.declaredInputShape)} → ${ms.outputSize} outputs · ${ms.paramCount.toLocaleString()} parameters`,
+      ),
     );
-    if (s.extraOutputs.length) {
-      content.append(note(`The model has several outputs; only "${s.outputName}" is checked.`));
+    if (ms.extraOutputs.length) {
+      content.append(note(`The model has several outputs; only "${ms.outputName}" is checked.`));
     }
   }
-
-  const examples = el("div", "button-row");
-  for (const key of Object.keys(EXAMPLES)) {
-    const b = el("button", "secondary-button", EXAMPLES[key].label);
-    b.type = "button";
-    b.addEventListener("click", () => loadExample(ctx, key));
-    examples.append(b);
-  }
-  content.append(examples);
-  return accordion(state, "model", "1 · Model (ONNX)", content);
-}
-
-function renderPropertySection(ctx) {
-  const { state, rerender } = ctx;
-  const s = state.getState();
-  const content = el("div", "page-flow");
-
-  content.append(
-    selectField({
-      name: "mode",
-      label: "What to check",
-      value: s.mode,
-      options: [
-        { value: "vnnlib", label: "VNNLIB property" },
-        { value: "points", label: "Robustness around points" },
-      ],
-      onChange: (v) => {
-        state.set("mode", v);
-        rerender();
-      },
-    }),
-  );
 
   if (s.mode === "vnnlib") {
     content.append(
       createFileInput({
         accept: ".vnnlib,.gz,.txt,.smt2",
-        label: "VNNLIB property file",
+        label: "Property (.vnnlib)",
         fileName: s.vnnlib?.fileName,
         onFile: async (file) => {
           loadSpecText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
@@ -247,56 +199,98 @@ function renderPropertySection(ctx) {
     if (s.vnnlib?.error) content.append(errorText(s.vnnlib.error));
     const v = s.vnnlib?.summary;
     if (v) {
-      content.append(
-        createStatGrid([
-          { label: "Inputs (X)", value: String(v.numInputs) },
-          { label: "Outputs (Y)", value: String(v.numOutputs) },
-          { label: "Input regions", value: String(v.regions) },
-          { label: "Unsafe cases", value: String(v.disjuncts), title: "Disjuncts of the output condition, summed over regions" },
-        ]),
-      );
-      const m = s.model?.summary;
-      if (m && (m.inputSize !== v.numInputs || m.outputSize !== v.numOutputs)) {
+      content.append(note(`${v.numInputs} inputs, ${v.numOutputs} outputs, ${v.regions} input region(s), ${v.disjuncts} unsafe case(s).`));
+      if (ms && (ms.inputSize !== v.numInputs || ms.outputSize !== v.numOutputs)) {
         content.append(
-          errorText(`The property has ${v.numInputs} inputs and ${v.numOutputs} outputs; the model has ${m.inputSize} and ${m.outputSize}.`),
+          errorText(`The property has ${v.numInputs} inputs and ${v.numOutputs} outputs; the model has ${ms.inputSize} and ${ms.outputSize}.`),
         );
       }
     }
-    content.append(
-      note("A VNNLIB file describes the unsafe condition. The tool searches the input box for an input that satisfies it."),
-    );
   } else {
-    const ps = s.pointsSettings;
-    const set = (key) => (v) => state.patch("pointsSettings", { [key]: v });
     content.append(
       createFileInput({
         accept: ".csv,.txt,.gz",
-        label: "CSV of points",
+        label: "Points (.csv)",
         fileName: s.points?.fileName && `${s.points.fileName} (${s.points.rows} rows)`,
         onFile: async (file) => {
           loadPointsText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
           rerender();
         },
       }),
-      note("One point per row: the model's input features (flattened), then, for classification, the class index."),
-      selectField({
-        name: "task",
-        label: "Task",
-        value: ps.task,
-        options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
-        onChange: (v) => {
-          state.patch("pointsSettings", { task: v });
-          rerender();
-        },
-      }),
-      numberField({ name: "epsilon", label: "ε (L∞ radius)", value: ps.epsilon, onChange: set("epsilon") }),
+      note("CSV: one point per row, the input features, then the class label."),
     );
-    if (ps.task === "regression-standard") {
-      content.append(numberField({ name: "delta", label: "δ (allowed output change, L∞)", value: ps.delta, onChange: set("delta") }));
-    }
-    if (ps.task === "regression-lipschitz") {
-      content.append(numberField({ name: "lipschitz", label: "L (allowed Lipschitz constant, L∞→L∞)", value: ps.lipschitz, onChange: set("lipschitz") }));
-    }
+  }
+
+  const examples = el("div", "button-row");
+  const b = el("button", "secondary-button", `Load benchmark: ${BENCHMARK.label}`);
+  b.type = "button";
+  b.addEventListener("click", () => loadBenchmark(ctx));
+  examples.append(b);
+  content.append(examples, note("Fetched from the VNN-COMP repository on GitHub (about 2 MB)."));
+  return accordion(state, "model", "1 · Model and points", content);
+}
+
+function renderPropertySection(ctx) {
+  const { state, rerender } = ctx;
+  const s = state.getState();
+  const content = el("div", "page-flow");
+
+  if (s.mode === "vnnlib") {
+    content.append(note("The property comes from the VNNLIB file (untested mode; switch back under Advanced)."));
+    return accordion(state, "property", "2 · Robustness", content);
+  }
+
+  const ps = s.pointsSettings;
+  const set = (key) => (v) => state.patch("pointsSettings", { [key]: v });
+  content.append(
+    selectField({
+      name: "task",
+      label: "Robustness type",
+      value: ps.task,
+      options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
+      onChange: (v) => {
+        state.patch("pointsSettings", { task: v });
+        rerender();
+      },
+    }),
+    numberField({ name: "epsilon", label: "ε (L∞ radius)", value: ps.epsilon, onChange: set("epsilon") }),
+  );
+  if (ps.task === "regression-standard") {
+    content.append(numberField({ name: "delta", label: "δ (allowed output change, L∞)", value: ps.delta, onChange: set("delta") }));
+  }
+  if (ps.task === "regression-lipschitz") {
+    content.append(numberField({ name: "lipschitz", label: "L (allowed Lipschitz constant, L∞→L∞)", value: ps.lipschitz, onChange: set("lipschitz") }));
+  }
+  content.append(note("ε is in the model's own input units: if the model expects normalised inputs, ε is normalised too."));
+  return accordion(state, "property", "2 · Robustness", content);
+}
+
+function renderAdvancedSection(ctx) {
+  const { state, rerender } = ctx;
+  const s = state.getState();
+  const a = s.attack;
+  const ps = s.pointsSettings;
+  const setA = (key) => (v) => state.patch("attack", { [key]: v });
+  const setP = (key) => (v) => state.patch("pointsSettings", { [key]: v });
+  const content = el("div", "page-flow");
+
+  content.append(
+    selectField({
+      name: "mode",
+      label: "What to check",
+      value: s.mode,
+      options: [
+        { value: "points", label: "Robustness around points" },
+        { value: "vnnlib", label: "VNNLIB property (untested)" },
+      ],
+      onChange: (v) => {
+        state.set("mode", v);
+        rerender();
+      },
+    }),
+  );
+
+  if (s.mode === "points") {
     if (ps.task === "classification") {
       const label = el("label", "checkbox");
       const cb = document.createElement("input");
@@ -306,37 +300,40 @@ function renderPropertySection(ctx) {
         state.patch("pointsSettings", { searchEpsilon: cb.checked });
         rerender();
       });
-      label.append(cb, " Find each point's smallest breaking ε (binary search)");
+      label.append(cb, " Also find each point's smallest breaking ε (slower)");
       content.append(label);
       if (ps.searchEpsilon) {
-        content.append(numberField({ name: "searchIterations", label: "Bisection steps", value: ps.searchIterations, integer: true, min: 1, onChange: set("searchIterations") }));
+        content.append(numberField({ name: "searchIterations", label: "Bisection steps", value: ps.searchIterations, integer: true, min: 1, onChange: setP("searchIterations") }));
       }
     }
     content.append(
-      textField({ name: "domainLo", label: "Input domain lower bounds (optional: one value, or one per feature)", value: ps.domainLoText, placeholder: "e.g. 0", onChange: set("domainLoText") }),
-      textField({ name: "domainHi", label: "Input domain upper bounds (optional)", value: ps.domainHiText, placeholder: "e.g. 1", onChange: set("domainHiText") }),
-      el(
-        "p",
-        "warning-box",
-        "ε is in the model's own input space. If the model expects normalised inputs, give ε (and the points and domain bounds) in normalised units.",
-      ),
+      textField({ name: "domainLo", label: "Clip inputs below (optional: one value, or one per feature)", value: ps.domainLoText, placeholder: "e.g. 0", onChange: setP("domainLoText") }),
+      textField({ name: "domainHi", label: "Clip inputs above (optional)", value: ps.domainHiText, placeholder: "e.g. 1", onChange: setP("domainHiText") }),
     );
   }
 
-  return accordion(state, "property", "2 · Property", content);
-}
-
-function renderAttackSection(ctx) {
-  const { state } = ctx;
-  const a = state.getState().attack;
-  const set = (key) => (v) => state.patch("attack", { [key]: v });
   const grid = el("div", "field-grid");
   grid.append(
-    numberField({ name: "seed", label: "Seed", value: a.seed, integer: true, min: 0, onChange: set("seed") }),
-    numberField({ name: "restarts", label: "Random restarts R", value: a.restarts, integer: true, min: 1, onChange: set("restarts") }),
-    numberField({ name: "steps", label: "PGD steps K", value: a.steps, integer: true, min: 1, onChange: set("steps") }),
-    numberField({ name: "alpha", label: "Step size α (fraction of box width)", value: a.alpha, placeholder: "2.5 / K", onChange: set("alpha") }),
-    numberField({ name: "selfTestSamples", label: "Self-test samples", value: a.selfTestSamples, integer: true, min: 1, onChange: set("selfTestSamples") }),
+    numberField({ name: "seed", label: "Seed", value: a.seed, integer: true, min: 0, onChange: setA("seed") }),
+    numberField({ name: "restarts", label: "Random restarts R", value: a.restarts, integer: true, min: 1, onChange: setA("restarts") }),
+    numberField({ name: "steps", label: "PGD steps K", value: a.steps, integer: true, min: 1, onChange: setA("steps") }),
+    selectField({
+      name: "schedule",
+      label: "Step schedule",
+      value: a.schedule,
+      options: [
+        { value: "apgd", label: "APGD (adaptive)" },
+        { value: "constant", label: "Constant (Madry PGD)" },
+      ],
+      onChange: (v) => {
+        state.patch("attack", { schedule: v });
+        rerender();
+      },
+    }),
+    ...(a.schedule === "constant"
+      ? [numberField({ name: "alpha", label: "Step size α (fraction of box width)", value: a.alpha, placeholder: "2.5 / K", onChange: setA("alpha") })]
+      : []),
+    numberField({ name: "selfTestSamples", label: "Self-test samples", value: a.selfTestSamples, integer: true, min: 1, onChange: setA("selfTestSamples") }),
     selectField({
       name: "backend",
       label: "tf.js backend",
@@ -345,15 +342,14 @@ function renderAttackSection(ctx) {
         { value: "cpu", label: "CPU (deterministic)" },
         { value: "webgl", label: "WebGL (faster, may lose precision)" },
       ],
-      onChange: set("backend"),
+      onChange: setA("backend"),
     }),
   );
-  const content = el("div", "page-flow");
   content.append(
     grid,
     note("Each restart starts uniformly at random in the box; the box centre and the corner the gradient points to are always tried as well."),
   );
-  return accordion(state, "attack", "3 · Attack settings", content, false);
+  return accordion(state, "advanced", "Advanced", content, false);
 }
 
 // ---------------------------------------------------------------------------
@@ -421,6 +417,7 @@ async function startRun(ctx) {
     steps: s.attack.steps,
     alpha: s.attack.alpha === "" ? undefined : s.attack.alpha,
     backend: s.attack.backend,
+    schedule: s.attack.schedule,
     selfTestSamples: s.attack.selfTestSamples,
   };
 
@@ -457,6 +454,12 @@ async function startRun(ctx) {
     model: s.model.fileName,
     property: s.mode === "vnnlib" ? s.vnnlib.fileName : s.points.fileName,
   };
+  // Published verdicts for this exact ε, if the loaded points came with them.
+  const ref = s.mode === "points" && s.pointsSettings.task === "classification" ? s.points.reference : null;
+  const verdicts = ref?.verdicts?.[String(s.pointsSettings.epsilon)];
+  if (verdicts && verdicts.length === s.points.rows) {
+    meta.reference = { verdicts, source: ref.source, sourceUrl: ref.sourceUrl };
+  }
   state.set("run", { status: "running", progress: null });
   rerender();
 
@@ -532,7 +535,8 @@ function reproducibility(result) {
     seed: s.seed,
     restarts: s.restarts,
     steps: s.steps,
-    alpha: s.alpha,
+    schedule: s.schedule,
+    alpha: s.schedule === "constant" ? s.alpha : undefined,
     backend: s.backend,
     selfTestSamples: result.selfTest.count,
     selfTestMaxRelError: result.selfTest.maxRelError,
@@ -637,6 +641,8 @@ function renderPointsResult(ctx, result) {
   }
   chips.push({ label: "Time", value: formatTime(result.timeMs) }, { label: "Self-test max rel. error", value: formatNumber(result.selfTest.maxRelError, 3) });
   summary.append(createStatGrid(chips));
+  const ref = result.meta.reference;
+  if (ref) summary.append(renderReferenceComparison(result, ref));
   if (result.task === "regression-lipschitz") {
     summary.append(note("Each value is an empirical lower bound on the local Lipschitz constant (L∞ in, L∞ out): the true constant is at least this large."));
   }
@@ -665,6 +671,42 @@ function renderPointsResult(ctx, result) {
   return group;
 }
 
+function renderReferenceComparison(result, ref) {
+  const n = result.rows.length;
+  const robust = ref.verdicts.filter((v) => v === "unsat").length;
+  const notRobust = ref.verdicts.filter((v) => v === "sat").length;
+  const undecided = n - robust - notRobust;
+  const found = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "sat").length;
+  const foundUndecided = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "unknown").length;
+  const contradictions = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "unsat").length;
+  const pct = (k) => `${((k / n) * 100).toFixed(1)}%`;
+  const box = el("div", "page-flow");
+  box.append(
+    createStatGrid([
+      {
+        label: "Published robust accuracy (exact)",
+        value: undecided ? `${pct(robust)}–${pct(robust + undecided)} (${undecided} undecided)` : `${pct(robust)} (${robust}/${n})`,
+      },
+      { label: "Non-robust points found", value: `${found} / ${notRobust}` },
+    ]),
+  );
+  const text = el("p", "section-note");
+  text.append(
+    "Reference: verdicts of complete verifiers on these points at this ε (",
+    Object.assign(el("a", "inline-link", "source"), { href: ref.sourceUrl, target: "_blank", rel: "noopener" }),
+    "). The tool's robust accuracy is an upper bound on the exact value; it matches when every non-robust point is found.",
+    undecided ? ` "Undecided" points timed out for every verifier.` : "",
+  );
+  box.append(text);
+  if (foundUndecided) {
+    box.append(note(`The tool found a counterexample for ${foundUndecided} point(s) that no verifier decided: these points are not robust.`));
+  }
+  if (contradictions) {
+    box.append(errorText(`${contradictions} counterexample(s) contradict a published proof of robustness. Please report this: it indicates a bug or a mismatch in the input box.`));
+  }
+  return box;
+}
+
 function pointColumns(result) {
   const s = result.settings;
   const idx = { label: "#", value: (r) => String(r.index + 1) };
@@ -677,6 +719,15 @@ function pointColumns(result) {
       { label: "Adv. pred.", value: (r) => (r.broken && r.cleanCorrect ? String(r.counterexample.prediction) : "–") },
       { label: "Best margin", value: (r) => formatNumber(r.bestMargin, 4) },
     ];
+    const ref = result.meta.reference;
+    if (ref) {
+      cols.push({
+        label: "Published",
+        title: "Verdict of complete verifiers: robust = proven, not robust = a counterexample exists",
+        value: (r) => ({ unsat: "robust", sat: "not robust" })[ref.verdicts[r.index]] ?? "undecided",
+        className: (r) => (r.broken && ref.verdicts[r.index] === "unsat" ? "cell-bad" : ""),
+      });
+    }
     if (s.searchEpsilon) {
       cols.push({
         label: "Smallest ε",
@@ -738,7 +789,7 @@ export function renderCheckPage(ctx) {
 
   const controls = el("div", "control-stack");
   const controlGroup = el("div", "accordion-group");
-  controlGroup.append(renderModelSection(ctx), renderPropertySection(ctx), renderAttackSection(ctx));
+  controlGroup.append(renderModelSection(ctx), renderPropertySection(ctx), renderAdvancedSection(ctx));
   controls.append(controlGroup);
 
   const results = el("div", "results-stack");
@@ -750,7 +801,7 @@ export function renderCheckPage(ctx) {
   } else {
     const intro = el("div", "panel");
     intro.append(
-      el("p", "", "Load an ONNX network and either a VNNLIB property or a CSV of points, then run the attack. Everything runs in your browser; nothing is uploaded."),
+      el("p", "", "Load the benchmark, or your own ONNX classifier and a CSV of points, then run the attack. Everything runs in your browser; nothing is uploaded."),
       el(
         "p",
         "section-note",

@@ -8,7 +8,7 @@ const state = createAppState({
   useSansSerif: true,
   useDarkMode: false,
   accordionState: {},
-  mode: "vnnlib",
+  mode: "points",
   model: null, // { fileName, bytes, summary, error, loading }
   vnnlib: null, // { fileName, text, summary, error }
   points: null, // { fileName, text, rows, error }
@@ -24,11 +24,12 @@ const state = createAppState({
   },
   attack: {
     seed: 0,
-    restarts: 100,
-    steps: 100,
+    restarts: 10,
+    steps: 50,
     alpha: "",
+    schedule: "apgd",
     backend: "cpu",
-    selfTestSamples: 100,
+    selfTestSamples: 20,
   },
   run: { status: "idle", result: null, error: null, progress: null },
 });

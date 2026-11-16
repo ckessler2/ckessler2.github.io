@@ -5,7 +5,7 @@
 import { makeBox, boxContains, clampToBox32, sampleBox32 } from "./box.js";
 import { createRng, deriveRng } from "./rng.js";
 import { runPgd, defaultAlpha } from "./pgd.js";
-import { createClassificationLoss, createDeviationLoss, createLipschitzLoss } from "./objectives.js";
+import { createClassificationLoss, createTargetedClassificationLoss, createDeviationLoss, createLipschitzLoss } from "./objectives.js";
 import { selfTest } from "../check/ort-check.js";
 import { epsilonBox, median } from "../spec/points.js";
 import { DISCLAIMER } from "./report.js";
@@ -22,6 +22,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
   const t0 = performance.now();
   const { task, epsilon, seed, restarts, steps } = settings;
   const alpha = settings.alpha ?? defaultAlpha(steps);
+  const schedule = settings.schedule ?? "constant";
   const { domainLo = null, domainHi = null } = settings;
 
   if (!(epsilon > 0)) throw new Error("ε must be a positive number.");
@@ -67,7 +68,9 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
       }
 
       const attack = async (eps, box) => {
-        const loss = createClassificationLoss(tf, label, model.outputSize);
+        const loss = settings.targeted
+          ? createTargetedClassificationLoss(tf, label, model.outputSize)
+          : createClassificationLoss(tf, label, model.outputSize);
         let found = null;
         try {
           const res = await runPgd(tf, {
@@ -77,6 +80,8 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
             restarts,
             steps,
             alpha,
+            schedule,
+            copies: loss.copies ?? 1,
             rng,
             isCandidate: (m) => m < 0,
             onCandidate: async (x32) => {
@@ -134,6 +139,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
           restarts,
           steps,
           alpha,
+          schedule,
           rng,
           includeCentre: !lipschitz,
           onStep: (step, best) => progress({ step, best }),
@@ -182,7 +188,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
     summary,
     timeMs: performance.now() - t0,
     selfTest: test,
-    settings: { ...settings, alpha },
+    settings: { ...settings, alpha, schedule },
     disclaimer: DISCLAIMER,
   };
 }
