@@ -1,5 +1,4 @@
 import { SUPPORTED_OPS } from "../onnx/translate.js";
-import { DISCLAIMER } from "../attack/report.js";
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -49,77 +48,131 @@ export function renderMethodPage({ renderMath }) {
   card.append(
     el("h2", "", "What this tool does"),
     para(
-      "You give it a neural network in ONNX format and a property. It searches for an input that breaks the property, using projected gradient descent (PGD; ",
-      link("https://arxiv.org/abs/1706.06083", "Madry et al., 2018"),
-      "). Everything runs in your browser: the model is translated into TensorFlow.js to get gradients, and nothing is uploaded.",
+      "You give it a classifier in ONNX format, a set of points (for example test images with their labels) and a radius ε. For every point it asks whether some input within L∞ distance ε (the ",
+      el("em", "", "ε-ball"),
+      ") is classified differently, and answers in one of three ways:",
     ),
-    el("p", "warning-box", `PGD is a falsifier. A counterexample proves the network is not robust. Failing to find one proves nothing. ${DISCLAIMER}`),
-    para(
-      "So the tool reports either ",
-      el("strong", "", "counterexample found"),
-      " or ",
-      el("strong", "", "no counterexample found after R restarts × K steps"),
-      ". It never says “robust” or “verified”. For a proof you need a complete verifier such as Marabou or α,β-CROWN.",
-    ),
-
-    el("h2", "", "Properties"),
-    el("h3", "", "VNNLIB (the VNN-COMP format)"),
-    para(
-      "A VNNLIB file declares inputs ",
-      code("X_i"),
-      " and outputs ",
-      code("Y_j"),
-      ", bounds each input to an interval, and states the ",
-      el("em", "", "unsafe"),
-      " condition on the outputs as linear comparisons, possibly combined with ",
-      code("and"),
-      " / ",
-      code("or"),
-      ". The instance is sat if some input in the box satisfies the unsafe condition. Disjunctions on the input side are handled by attacking each input box separately.",
-    ),
-    para("Each output constraint is written as gᵢ(y) = aᵢ·y − bᵢ ≤ 0. The attack minimises the margin"),
-    math(String.raw`m(y) = \min_{\text{cases } c}\; \max_{i \in c}\; \big(a_i^\top y - b_i\big),`),
-    para("which is ≤ 0 exactly when some case of the unsafe condition holds."),
-
-    el("h3", "", "Robustness around points"),
-    para("For a CSV of points x* and a radius ε (L∞), the box is ‖x − x*‖∞ ≤ ε, optionally clipped to an input domain."),
     list([
-      "Classification: minimise the margin (true-class logit − largest other logit); below 0 means misclassified. Reported: clean accuracy, an upper bound on robust accuracy, and optionally each point's smallest breaking ε, found by binary search.",
-      "Regression, standard robustness: ‖x − x*‖ ≤ ε ⇒ ‖f(x) − f(x*)‖ ≤ δ. The attack maximises ‖f(x) − f(x*)‖∞ and reports the largest value found.",
-      "Regression, Lipschitz robustness: ‖x − x*‖ ≤ ε ⇒ ‖f(x) − f(x*)‖ ≤ L‖x − x*‖. The attack maximises the ratio; the largest value found is an empirical lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio.",
+      [el("strong", "", "certified"), ": proven robust. CROWN, a bound-propagation method, shows that no input in the ε-ball can change the class."],
+      [el("strong", "", "counterexample"), ": proven not robust. An attack found an input in the ε-ball that is misclassified, and an independent forward pass confirmed it."],
+      [el("strong", "", "unknown"), ": neither. The bounds were too loose to prove robustness and the attack found no counterexample."],
     ]),
-    el("p", "warning-box", "ε is in the model's own input space. If the network expects normalised inputs, ε must be given in normalised units too."),
+    para(
+      "Robust accuracy is therefore reported as a range: the share of certified points is a lower bound, the share of points without a counterexample is an upper bound, and the exact value lies in between. The range collapses to the exact value when no point is unknown.",
+    ),
+    el(
+      "p",
+      "warning-box",
+      "Neither method is complete. Certification is sound but can fail to prove robust points robust; the attack can miss counterexamples. An unknown point may be either. Only a complete verifier (for example α,β-CROWN or Marabou) is guaranteed to decide every point.",
+    ),
+    para("Everything runs in your browser. Nothing is uploaded; the built-in benchmarks are downloaded from GitHub."),
+
+    el("h2", "", "Certification (CROWN)"),
+    para(
+      "The network must be a chain of affine layers separated by ReLUs. On loading, consecutive affine operators (Gemm, MatMul, and Add, Sub, Mul or Div by constants, for example input normalisation, plus Flatten, Reshape and Identity) are merged into one matrix per layer, giving",
+    ),
+    math(String.raw`z_1 = W_1 x + b_1,\qquad z_k = W_k\,\mathrm{relu}(z_{k-1}) + b_k,\qquad y = z_n .`),
+    para(
+      "Networks with other activations (Sigmoid, Tanh), branches, or a multiplication between two inputs are reported as not certifiable, and only the attack runs.",
+    ),
+    para(
+      "CROWN (",
+      link("https://arxiv.org/abs/1811.00866", "Zhang et al., 2018"),
+      ") bounds the margins y_label − y_j, for every other class j, from below over the whole ε-ball. It passes linear bounds backwards from the output to the input. A ReLU whose input interval [l, u] contains 0 is replaced by two linear bounds:",
+    ),
+    math(String.raw`a\,z \;\le\; \mathrm{relu}(z) \;\le\; \frac{u\,(z - l)}{u - l},\qquad a = \begin{cases} 1 & u \ge -l \\ 0 & \text{otherwise.} \end{cases}`),
+    para(
+      "The intervals [l, u] of each hidden layer come from the same backward pass applied to that layer (the first layer's are exact). The resulting bound holds for every input in the ball. A point is certified when the smallest margin bound is positive.",
+    ),
+    list([
+      "There is no branch and bound (no splitting of unstable ReLUs or of the input box). CROWN is therefore incomplete: with many unstable ReLUs, typically at larger ε or in networks not trained for verifiability, the bound becomes very loose and nothing is certified.",
+      "The bounds are computed in float64 for the real-valued network. The deployed network runs in float32, so a point is only reported as certified if its margin bound exceeds 10⁻³. That is far above the float32 rounding we measured (the translated and reference networks agree to about 10⁻⁶ relative, and onnxruntime differs from an exact float64 forward pass by at most 2·10⁻⁵ relative on ACAS Xu). It is a safety margin, not a formal proof about float32 arithmetic.",
+      "Certified points are not attacked. Certification applies to classification only; the regression checks and the VNNLIB mode are attack-only.",
+    ]),
 
     el("h2", "", "The attack"),
+    para("Points that are not certified are attacked. The attack minimises the classification margin"),
+    math(String.raw`m(x) = y_{\text{label}}(x) - \max_{j \ne \text{label}} y_j(x),`),
+    para("which is negative exactly when x is misclassified, over the ε-ball (clipped to the input range, if one is given)."),
     list([
-      "L∞ PGD with the step-size schedule of APGD (Croce & Hein, 2020): each start takes sign-gradient steps x ← clip(x − η·(u − l)·sign(∇m(x)), l, u) with momentum 0.75. The step η starts at the full box width and is halved for a start, which also jumps back to its best point so far, whenever its progress stalls at fixed checkpoints. The classic constant-step PGD of Madry et al. (2018) is available under Advanced.",
-      "R random starts drawn uniformly in the box (default 10), K steps each (default 50), batched into one tensor, plus the box centre and the corner the gradient at the centre points towards.",
-      "On the published VNN-COMP MNIST benchmarks (39 instances with known counterexamples), the APGD schedule found 36 at these defaults (35 with K = 20), against 34 for constant-step PGD with K = 20, which was no better with 9× more restarts. Per-class targeted attacks added nothing at 9× the cost, so they are not used. None of the variants reported a counterexample on any of the 90 instances published as robust.",
-      "VNNLIB and classification attacks stop as soon as a counterexample is confirmed.",
-      "A seeded random number generator (mulberry32) makes every run reproducible: the same seed, settings and backend give the same result.",
-      "The attack runs in a Web Worker, so the page stays responsive; Cancel stops it immediately.",
+      "It takes signed-gradient steps x ← clip(x − η·(u − l)·sign(∇m(x)), l, u), where l and u are the per-feature box bounds.",
+      [
+        "The step size follows APGD (",
+        link("https://arxiv.org/abs/2003.01690", "Croce & Hein, 2020"),
+        "). η starts at the full box width, with momentum 0.75. At checkpoints after ⌊0.22K⌋ steps, then at gaps that shrink by ⌊0.03K⌋ down to ⌊0.06K⌋, a start halves its step and returns to its best point so far if fewer than 75% of its steps since the last checkpoint improved the margin, or if its best margin has not changed and its step was not just halved. Constant-step PGD (",
+        link("https://arxiv.org/abs/1706.06083", "Madry et al., 2018"),
+        ") is available under Advanced.",
+      ],
+      "There are R uniformly random starts (default 10), each run for K steps (default 50), all batched into one tensor. The box centre and the box corner indicated by the gradient at the centre are always tried as well.",
+      "The attack stops as soon as a counterexample is confirmed. A point that is already misclassified without perturbation counts as a counterexample.",
+      "Randomness comes from a seeded generator (mulberry32). Gradients are computed with tf.js on the GPU (WebGL) by default, falling back to the CPU if WebGL is unavailable. On the CPU backend, the same seed and settings give bit-for-bit identical results; on WebGL, results can differ slightly between devices. This affects only which counterexamples the attack finds, not their validity (each is re-checked with onnxruntime) and not certification (CROWN runs in float64 JavaScript).",
+      "Gradients come from a TensorFlow.js translation of the ONNX model. The attack runs in a Web Worker, so the page stays responsive, and Cancel stops it immediately.",
     ]),
+    para(
+      "Gradient attacks can miss counterexamples that sit beyond a region where the margin first increases. On the built-in benchmarks the attack misses 3 of the 39 published counterexamples; for the one we analysed (6×256 network, image prop_1, ε = 0.05), this is the reason.",
+    ),
 
     el("h2", "", "How results are checked"),
     list([
-      "Self-test: before each run, the tf.js translation and onnxruntime-web are compared on sample inputs from the box. A difference above 1e-4 (relative to the output size) triggers a warning. The two libraries both use float32 but sum in different orders; on the ACAS Xu networks onnxruntime differs from an exact float64 forward pass by up to 1.7e-5.",
-      "Every candidate counterexample is clamped to the box and re-evaluated with onnxruntime-web, which runs the original ONNX file independently of the translation. The property is then re-checked in float64. Only candidates that pass are reported; the others are counted as spurious.",
-      "Box bounds are rounded inwards to float32, so a reported counterexample lies inside the box exactly as written in the property file, not just after rounding.",
+      "Every counterexample is clamped to the box and re-evaluated with onnxruntime-web, which runs the original ONNX file independently of the translation. The class change is then confirmed in float64. Candidates that fail are discarded and counted as spurious.",
+      "Box bounds are rounded inwards to float32, so a counterexample lies inside the box exactly as specified, not just after rounding.",
+      "Before each run, a self-test compares the translation with onnxruntime-web on random inputs from the boxes (20 by default). A warning appears if they differ by more than 10⁻⁴, relative to the size of the output vector.",
     ]),
+
+    el("h2", "", "Optional: ε range per point"),
+    para(
+      "Under Advanced, the tool can bisect ε for each point. “Certified ε ≥” is the largest ε at which CROWN still certifies the point; “breaking ε ≤” is the smallest ε at which the attack found a counterexample. The point's true robustness radius lies between the two.",
+    ),
+
+    el("h2", "", "Built-in benchmarks"),
+    para(
+      "These are published VNN-COMP instances, fetched from the competition's repositories (pinned commits). Each property file defines a box clip(x ± ε, 0, 1) around an MNIST test image, and the image and label are recovered from it. The 2022 images are snapped to k/255; the 2025 images are the box centres.",
+    ),
+    list([
+      [
+        "VNN-COMP 2022 mnist_fc: 784 → 2, 4 or 6 hidden layers of 256 ReLUs → 10; 15 images at ε = 0.03 and 0.05 (",
+        link("https://arxiv.org/abs/2212.10376", "report"),
+        ", Section 4.9 and Table 27).",
+      ],
+      [
+        "VNN-COMP 2025 cora_2024: 784 → 7 × 250 ReLUs → 10, three models, named point, trades and set; the report describes the training as standard, interval-bound propagation and set-based; 20 images at ε = 0.1 (",
+        link("https://arxiv.org/abs/2512.19007", "report"),
+        ", Section 0.4.19).",
+      ],
+    ]),
+    para(
+      "Each instance comes with the published verdict of the competition's complete verifiers: robust, not robust, or undecided (every verifier timed out). Where verifiers disagreed, the instance is recorded as not robust, because a counterexample was submitted and the opposing claims were penalised. The verdicts appear next to the tool's results, and any contradiction is flagged.",
+    ),
+
+    el("h2", "", "Validation"),
+    list([
+      "Built-in benchmarks, default settings (150 points in 9 network/ε settings): no contradiction with any published verdict. The tool certified 48 of the 90 published-robust points and found counterexamples for 36 of the 39 published-non-robust points. In every setting, the tool's robust-accuracy range contains the published value. On the set-trained CORA network it is exact (95.0%). Certification works well at ε = 0.03 (60–67% of points certified) and on the set-trained network, and certifies almost nothing on the 2022 networks at ε = 0.05. None of the 21 published-undecided points was decided.",
+      "Small 2-input network with exact ground truth (branch and bound): the attack finds every non-robust point, the breaking ε is never below the exact value and at most 0.7% above it, and CROWN certifies 134 of 142 robust (point, ε) pairs and never a non-robust one.",
+      "Translation: it agrees with onnxruntime-web to within 2·10⁻⁵ relative on all 45 ACAS Xu networks, and the merged layer chain matches onnxruntime on the benchmark networks and on ACAS Xu.",
+      "The checks can be rerun with the scripts in tests/benchmarks/ (crown.js for the table above).",
+    ]),
+
+    el("h2", "", "Other modes"),
+    list([
+      "Regression, standard robustness (‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ): the attack maximises the output change and reports the largest value found. A value above δ is a counterexample.",
+      "Regression, Lipschitz robustness (‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞): the attack maximises the ratio. The largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio.",
+      "VNNLIB properties (untested, attack only): VNN-COMP property files with boxes and linear output constraints combined with and/or. The attack minimises min over cases of max over constraints of (aᵢ·y − bᵢ), and a value ≤ 0 is a counterexample.",
+    ]),
+    el("p", "warning-box", "ε is in the model's own input units. If the network expects normalised inputs, ε (and the points) must be normalised too."),
 
     el("h2", "", "Supported models"),
     para(
-      "Feed-forward networks with one float32 input whose batch dimension is 1 or symbolic, and these ONNX operators: ",
+      "These are feed-forward networks with one float32 input whose batch dimension is 1 or symbolic. The supported ONNX operators are ",
       code(SUPPORTED_OPS.join(", ")),
-      ". Any other operator is refused by name. Weights must be embedded in the .onnx file (no external data). Gzipped files (.gz, as VNN-COMP ships them) are decompressed in the browser.",
+      "; any other is refused by name. Certification additionally requires a single chain of layers with ReLU as the only nonlinearity. Weights must be embedded in the .onnx file. Gzipped files are decompressed in the browser.",
     ),
 
-    el("h2", "", "Not yet included"),
+    el("h2", "", "Not included"),
     list([
-      "L2 attacks.",
-      "Gradient-free attacks for operators that cannot be translated.",
-      "Convolutional layers.",
-      "Certified lower bounds (interval bound propagation, CROWN), which would turn the report into “certified up to ε = a, attack found at ε = b”.",
+      "Branch and bound, which would make certification complete, and optimised relaxations (α-CROWN).",
+      "Convolutional layers and other activations.",
+      "L2 perturbations.",
+      "Gradient-free attacks (for example Square Attack). In our tests these found one counterexample that the gradient attack missed, but not reliably.",
     ]),
   );
 

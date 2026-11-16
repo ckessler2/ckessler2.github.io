@@ -1,98 +1,101 @@
 # Neural network robustness checker
 
-A static, client-side tool that searches for adversarial counterexamples in
-ONNX neural networks with projected gradient descent (PGD). Nothing is
-uploaded and nothing needs installing. See `robustness_checker_brief.md` for
-the original plan.
+A static, client-side tool that checks ε-ball robustness of ONNX classifiers.
+For each point it either **certifies** robustness with CROWN (a bound
+propagation method), finds a **counterexample** with a gradient attack (PGD
+with the APGD step schedule), or reports **unknown**. Robust accuracy is
+reported as a range: certified share ≤ exact value ≤ share without a
+counterexample. Nothing is uploaded and nothing needs installing. The
+original plan is in `robustness_checker_brief.md`; the page's **Method** tab
+documents the method in full.
 
-**PGD is a falsifier, not a verifier.** A counterexample proves that a network
-is not robust; finding none proves nothing. The tool reports "counterexample
-found" or "none found", and an *upper bound* on robust accuracy. It never
-says "robust" or "verified".
+Neither half is complete. Certification is sound but has no branch and
+bound, so it fails at larger ε, and the attack can miss counterexamples.
+Only a complete verifier decides every point.
 
 ## Using it
 
-Press **Load benchmark** to fetch the built-in benchmark (see below), or check
-your own classifier:
-
-1. Choose the model (`.onnx`).
-2. Choose a CSV of points: one row per point, the input features, then the
-   class label.
-3. Set ε (the L∞ radius) and press **Run attack**.
+1. Choose a model (`.onnx`) and a CSV of points (one row per point: the
+   input features, then the class label). Alternatively, pick a built-in
+   benchmark and press **Load benchmark**.
+2. Set ε (the L∞ radius) and press **Run**.
 
 ε is in the model's own input units, so if the model expects normalised
 inputs, ε is normalised too.
 
-The **Advanced** section holds:
+**Advanced** holds:
 
-- Seed, restarts R (default 10), steps K (default 50), the step schedule
-  (APGD by default, or constant-step PGD with step size α) and the tf.js
-  backend.
-- Clipping of the ε-box to a valid input range (for example, [0, 1] for
-  images).
-- An optional search for each point's smallest breaking ε.
-- An untested VNNLIB mode.
+- the certification switch;
+- the per-point ε range (certified up to / broken from);
+- input clipping (for example [0, 1] for images);
+- seed, restarts R (default 10), steps K (default 50), step schedule and
+  tf.js backend (WebGL by default; CPU for bit-for-bit reproducible attacks);
+- the untested VNNLIB mode.
 
-Every report states the seed, settings and library versions, so a run can be
-reproduced exactly.
+## Built-in benchmarks
 
-## Benchmark
+Published VNN-COMP instances, fetched on demand from the competition
+repositories (pinned commits) and shown next to their published verdicts.
+None of the files are hosted here.
 
-**Load benchmark** fetches the network `mnist-net_256x6` (784 → 6 × 256 ReLU →
-10) and its 15 MNIST test images from the VNN-COMP 2022 `mnist_fc` benchmark
-([benchmarks][vnncomp-bench], [results][vnncomp-results]). Nothing is hosted
-in this repository.
+| Benchmark | Network | Points | ε |
+|---|---|---|---|
+| VNN-COMP 2022 `mnist_fc` | 784 → 6, 4 or 2 × 256 ReLU → 10 | 15 MNIST images | 0.03, 0.05 |
+| VNN-COMP 2025 `cora_2024` | 784 → 7 × 250 ReLU → 10 (models `set`, `point`, `trades`) | 20 MNIST images | 0.1 |
 
-- **Where it comes from:** the files are read from GitHub, pinned to one
-  commit of the benchmark repository, which is about 2 MB.
-- **Images and labels:** recovered in the browser from the ε = 0.03 property
-  files. Each box is the image ± ε clipped to [0, 1], and pixels are k/255.
-- **Defaults:** ε = 0.05, with inputs clipped to [0, 1], as in the benchmark.
-- **Published verdicts:** stored in `src/spec/benchmark.js` (30 labels) and
-  shown next to the tool's results. They come from the complete verifiers of
-  VNN-COMP 2022 (also Table 27, pages 42–43, of the
-  [report](https://arxiv.org/abs/2212.10376)).
-  - **At ε = 0.03:** 14 robust, 1 not robust. That one is image 6, where 5
-    verifiers reported a counterexample and 1 reported unsat.
-  - **At ε = 0.05:** 12 robust, 2 not robust, and image 7 undecided (every
-    verifier timed out). The exact robust accuracy is therefore 80.0–86.7%.
-- **At the defaults:** the tool finds 1 of 2 non-robust images at ε = 0.05
-  (upper bound 93.3%) and 1 of 1 at ε = 0.03 (93.3%, the exact value). The
-  image it misses, image 1 at ε = 0.05, is missed by every attack variant
-  tried.
+**Where the images come from:** they are recovered from the property files.
+Each box is clip(x ± ε, 0, 1). The 2022 pixels are snapped to k/255; the 2025
+images are the box centres.
 
-Images are numbered from 0 here; the page's table numbers rows from 1.
+**Where the verdicts come from:** they are in `src/spec/benchmark.js`, as
+published by the competitions' complete verifiers:
 
-[vnncomp-bench]: https://github.com/VNN-COMP/vnncomp2022_benchmarks/tree/main/benchmarks/mnist_fc
-[vnncomp-results]: https://github.com/VNN-COMP/vnncomp2022_results
+- *robust* (unsat), *not robust* (sat) or *undecided* (every verifier timed
+  out);
+- where verifiers disagreed the instance is recorded as not robust, because a
+  counterexample was submitted and the opposing claims were penalised.
+
+Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
+(also Table 27 of the [2022 report](https://arxiv.org/abs/2212.10376));
+[2025 results](https://github.com/VNN-COMP/vnncomp2025_results)
+([2025 report](https://arxiv.org/abs/2512.19007)).
 
 ## Validation
 
 | Check | Result |
 |---|---|
-| Unit tests on hand-made networks with known answers | 26/26 pass (`npm test`) |
-| Seeded toy classifier (2 inputs, built in the test) vs exact branch and bound, ε = 0.1 | 5/40 points truly non-robust; the tool finds all 5 and no false counterexamples, with either step schedule. Robust accuracy 87.5% = exact value. |
-| Toy classifier, smallest breaking ε (ε ≤ 0.5) | All 25 breakable points found. Never below the exact value; at most 0.7% above it. |
-| ACAS Xu: tf.js translation vs onnxruntime-web, all 45 networks | Largest relative difference 1.8e-5. onnxruntime itself is 1.7e-5 from exact float64; tf.js is 3.8e-6. |
-| Published VNN-COMP MNIST instances: 2022 `mnist_fc` (3 networks) and 2025 `cora_2024` (3 networks); 39 published sat, 90 published unsat | No false counterexamples on any unsat instance. Sat instances found: constant-step PGD (R = 10, K = 20) 34/39, also 34 with 9× the restarts; APGD 35/39 at K = 20 and 36/39 at K = 50 (the default). Per-class targeted attacks: no gain at 9× the cost. |
+| Unit tests (`npm test`) | 30/30 pass |
+| Built-in benchmarks, default settings: 150 points in 9 network/ε settings (`node tests/benchmarks/crown.js`) | 0 contradictions with published verdicts. Certified 48/90 published-robust points; counterexamples for 36/39 published-non-robust points. The tool's range contains the published robust accuracy in all 9 settings, and is exact on CORA `set` (95.0%). |
+| Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
+| Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks. The CROWN layer chain matches onnxruntime on the benchmark networks and ACAS Xu. |
 
-Re-run the comparisons with:
+Per benchmark, at the defaults:
 
-```sh
-node tests/benchmarks/attack-variants.js [--unsat] [--only=i,j] <data-dir> ...
-```
+| Benchmark | ε | Tool's robust-accuracy range | Published |
+|---|---|---|---|
+| `mnist_fc` 6×256 | 0.03 | 60.0–93.3% | 93.3% |
+| `mnist_fc` 6×256 | 0.05 | 0.0–93.3% | 80.0–86.7% |
+| `mnist_fc` 4×256 | 0.03 | 66.7–93.3% | 93.3% |
+| `mnist_fc` 4×256 | 0.05 | 0.0–80.0% | 80.0% |
+| `mnist_fc` 2×256 | 0.03 | 60.0–86.7% | 80.0% |
+| `mnist_fc` 2×256 | 0.05 | 6.7–53.3% | 46.7% |
+| CORA `set` | 0.1 | 95.0–95.0% | 95.0% |
+| CORA `point` | 0.1 | 0.0–10.0% | 0.0–10.0% |
+| CORA `trades` | 0.1 | 0.0–90.0% | 0.0–90.0% |
 
-Each `<data-dir>` holds a benchmark's `onnx/` and `vnnlib/` folders
-(decompressed) and a `ground_truth.json` built from the published results
-([2022][vnncomp-results], [2025](https://github.com/VNN-COMP/vnncomp2025_results)).
-Per-instance verdicts for the 2022 benchmark are also in Table 27 (pages
-42–43) of the [VNN-COMP 2022 report](https://arxiv.org/abs/2212.10376).
+Further scripts in `tests/benchmarks/`:
+
+- `attack-variants.js` compares attack variants;
+- `triage.js` compares PGD signals against a gradient-free Square Attack.
+
+Both download what they need into `.bench-cache/` (git-ignored), except
+`attack-variants.js`, which takes local data directories.
 
 ## Running it locally
 
 There is no build step. The site loads tf.js, onnxruntime-web and MathJax
 from jsDelivr, with pinned versions in `src/lib/cdn.js`. Serve the repository
-root over HTTP; module workers do not load from `file://`.
+root over HTTP:
 
 ```sh
 python3 -m http.server 8000   # from the repository root
@@ -105,44 +108,36 @@ Tests run in Node with the same library versions. `package.json` and
 ```sh
 cd robustness-calculator
 npm install
-npm test      # unit tests + exact comparison on the toy classifier
+npm test
+node tests/benchmarks/crown.js     # validation on all built-in benchmarks
 ```
 
 ## Layout
 
-The layout follows `../plate-model`: hash router, small state store,
-DOM-building components, and the same stylesheet tokens.
-
 ```
 src/
   onnx/      protobuf reader, ONNX model decoder, graph -> tf.js translator
-  spec/      points.js (CSV mode), vnnlib.js (VNNLIB mode), benchmark.js (built-in benchmark)
-  attack/    pgd.js (PGD and APGD schedule), objectives.js (incl. targeted),
-             box.js (float32-safe boxes), rng.js (seeded),
-             run-points.js, run-vnnlib.js
+  bounds/    crown.js (layer-chain extraction and CROWN bounds)
+  attack/    pgd.js (PGD / APGD schedule), objectives.js, box.js, rng.js,
+             run-points.js (certify, then attack), run-vnnlib.js
+  spec/      points.js (CSV mode), vnnlib.js (VNNLIB mode), benchmark.js (built-in benchmarks)
   check/     ort-check.js (onnxruntime-web forward pass + self-test)
-  worker/    attack-worker.js (owns tf, ort and the model; loads libraries from CDN)
-  app/, components/, pages/   UI
+  worker/    attack-worker.js (owns tf, ort, the model and its layer chain)
+  app/, components/, pages/   UI (same structure and styles as ../plate-model)
 tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
-             exact branch and bound); benchmarks/attack-variants.js
+             exact branch and bound); benchmarks/ (crown.js, attack-variants.js, triage.js)
 ```
-
-The core modules take `tf` and `ort` as arguments rather than importing them,
-so the same code runs in the browser worker and in Node.
 
 ## Known limitations
 
-- **Speed.** The default tf.js CPU backend is plain JavaScript. Run time grows
-  with R × K for images that have no counterexample. At the defaults the
-  benchmark took about 37 s in headless Chromium on a shared test machine, so
-  it should be faster on a typical desktop.
-- **Missed counterexamples.** Three of the 39 published counterexamples tried
-  are missed by every variant, including image 1 of the benchmark at ε = 0.05.
-- **Scope.** Fully connected networks only; no convolutional layers yet. L∞
-  only.
-
-## Related tools
-
-No existing browser tool was found that combines ONNX loading, PGD and VNNLIB.
-The closest is [adversarial.js](https://github.com/kennysong/adversarial.js),
-an in-browser TensorFlow.js demonstration of FGSM, BIM and C&W attacks.
+- **Certification is incomplete.** There is no branch and bound or α-CROWN,
+  so it certifies little at larger ε or on networks not trained for
+  verification. For example, it certifies 0/15 on the 6×256 network at
+  ε = 0.05.
+- **Float32 is handled with a margin, not a proof.** Bounds are computed in
+  float64 for the real-valued network; certification requires a margin bound
+  above 10⁻³ to absorb float32 rounding, which is not a formal float32 proof.
+- **The attack misses some counterexamples:** 3 of 39 published ones,
+  including one hidden behind a rising margin (6×256, prop_1, ε = 0.05).
+- **Scope:** fully connected ReLU networks for certification; L∞ only; CPU
+  JavaScript (a benchmark run takes seconds to about a minute).

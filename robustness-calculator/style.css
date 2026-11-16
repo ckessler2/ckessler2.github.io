@@ -767,3 +767,7 @@ body[data-theme="dark"] {
 .file-row-label {
   font-size: var(--font-size-body);
 }
+
+.data-table .cell-ok {
+  color: var(--ok);
+}

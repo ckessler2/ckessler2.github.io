@@ -9,6 +9,7 @@ const state = createAppState({
   useDarkMode: false,
   accordionState: {},
   mode: "points",
+  benchmarkId: "mnist_fc-256x6",
   model: null, // { fileName, bytes, summary, error, loading }
   vnnlib: null, // { fileName, text, summary, error }
   points: null, // { fileName, text, rows, error }
@@ -28,7 +29,8 @@ const state = createAppState({
     steps: 50,
     alpha: "",
     schedule: "apgd",
-    backend: "cpu",
+    certify: true,
+    backend: "webgl",
     selfTestSamples: 20,
   },
   run: { status: "idle", result: null, error: null, progress: null },

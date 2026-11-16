@@ -10,12 +10,15 @@ import { parseVnnlib } from "../spec/vnnlib.js";
 import { parsePointsCsv, parseBoundList } from "../spec/points.js";
 import { runVnnlibCheck } from "../attack/run-vnnlib.js";
 import { runPointsCheck } from "../attack/run-points.js";
+import { buildReluChain } from "../bounds/crown.js";
 
 let tf = null;
 let ort = null;
 let parsed = null;
 let model = null;
 let checker = null;
+let chain = null; // CROWN layer chain, or null with chainError set
+let chainError = null;
 
 async function loadLibraries() {
   if (tf) return;
@@ -57,6 +60,8 @@ function summary(m, p) {
     paramCount: m.paramCount,
     opset: m.opset,
     producer: p.producer,
+    certifiable: chain !== null,
+    certifyNote: chainError,
   };
 }
 
@@ -72,6 +77,9 @@ async function handle(msg, reply) {
     parsed = parseOnnxModel(bytes);
     model = translateModel(tf, parsed);
     checker = await createOrtChecker(ort, bytes, model);
+    const c = buildReluChain(parsed, model.featureShape);
+    chain = c.error ? null : c;
+    chainError = c.error ?? null;
     return summary(model, parsed);
   }
 
@@ -103,6 +111,8 @@ async function handle(msg, reply) {
       model,
       checker,
       points,
+      chain,
+      chainError,
       settings: { ...runSettings, domainLo, domainHi },
       onProgress,
     });

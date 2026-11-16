@@ -6,8 +6,8 @@ import { createEpsilonHistogram } from "../components/histogram.js";
 import { downloadTextFile } from "../components/download.js";
 import { parseVnnlib } from "../spec/vnnlib.js";
 import { TASKS } from "../spec/points.js";
-import { BENCHMARK, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
-import { DISCLAIMER } from "../attack/report.js";
+import { BENCHMARKS, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
+import { DISCLAIMER, disclaimerFor } from "../attack/report.js";
 import { TFJS_VERSION, ORT_VERSION } from "../lib/cdn.js";
 
 
@@ -117,27 +117,25 @@ async function fetchBytes(url) {
   return url.endsWith(".gz") ? gunzip(bytes) : bytes;
 }
 
-async function loadBenchmark(ctx) {
+async function loadBenchmark(ctx, id) {
+  const bench = BENCHMARKS.find((b) => b.id === id) ?? BENCHMARKS[0];
   const { state, rerender } = ctx;
   state.set("mode", "points");
   state.set("run", { status: "idle" });
-  state.set("model", { fileName: BENCHMARK.modelName, loading: true });
+  state.set("model", { fileName: bench.modelName, loading: true });
   rerender();
   try {
-    const [modelBytes, ...props] = await Promise.all([
-      fetchBytes(BENCHMARK.modelUrl),
-      ...BENCHMARK.propertyUrls.map(fetchBytes),
-    ]);
+    const [modelBytes, ...props] = await Promise.all([fetchBytes(bench.modelUrl), ...bench.propertyUrls.map(fetchBytes)]);
     const decoder = new TextDecoder();
-    const points = props.map((b) => pointFromProperty(decoder.decode(b), BENCHMARK.propertyEpsilon, { snap: true }));
+    const points = props.map((b) => pointFromProperty(decoder.decode(b), bench.propertyEpsilon, { snap: bench.snapPixels }));
     const csv = pointsCsvText(points, [
-      `${BENCHMARK.label}: 15 MNIST test images and labels, recovered from the benchmark's properties.`,
-      `Source: ${BENCHMARK.modelUrl.replace(/\/onnx\/.*/, "")}`,
+      `${bench.label}: ${points.length} MNIST test images and labels, recovered from the benchmark's properties (${bench.imageNames.join(" ")}).`,
+      `Source: ${bench.modelUrl.replace(/\/onnx\/.*/, "")}`,
     ]);
-    loadPointsText(ctx, BENCHMARK.pointsName, csv);
-    state.patch("points", { reference: BENCHMARK.reference });
-    state.patch("pointsSettings", { task: "classification", searchEpsilon: false, ...BENCHMARK.settings });
-    await loadModelBytes(ctx, BENCHMARK.modelName, modelBytes);
+    loadPointsText(ctx, `${bench.label} (images)`, csv);
+    state.patch("points", { reference: bench.reference, imageNames: bench.imageNames });
+    state.patch("pointsSettings", { task: "classification", searchEpsilon: false, ...bench.settings });
+    await loadModelBytes(ctx, bench.modelName, modelBytes);
   } catch (err) {
     state.set("model", { error: `Could not load the benchmark: ${err.message}` });
     rerender();
@@ -182,6 +180,9 @@ function renderModelSection(ctx) {
     if (ms.extraOutputs.length) {
       content.append(note(`The model has several outputs; only "${ms.outputName}" is checked.`));
     }
+    content.append(
+      note(ms.certifiable ? "Certification (CROWN): available for this model." : `Certification (CROWN): not available: ${ms.certifyNote}. Only the attack will run.`),
+    );
   }
 
   if (s.mode === "vnnlib") {
@@ -221,12 +222,21 @@ function renderModelSection(ctx) {
     );
   }
 
+  const benchField = selectField({
+    name: "benchmark",
+    label: "Benchmark",
+    value: s.benchmarkId ?? BENCHMARKS[0].id,
+    options: BENCHMARKS.map((bm) => ({ value: bm.id, label: bm.label })),
+    onChange: (v) => state.set("benchmarkId", v),
+  });
+  benchField.classList.remove("field-wide-input");
+  benchField.classList.add("field-stacked");
   const examples = el("div", "button-row");
-  const b = el("button", "secondary-button", `Load benchmark: ${BENCHMARK.label}`);
+  const b = el("button", "secondary-button", "Load benchmark");
   b.type = "button";
-  b.addEventListener("click", () => loadBenchmark(ctx));
+  b.addEventListener("click", () => loadBenchmark(ctx, state.getState().benchmarkId ?? BENCHMARKS[0].id));
   examples.append(b);
-  content.append(examples, note("Fetched from the VNN-COMP repository on GitHub (about 2 MB)."));
+  content.append(benchField, examples, note("Published VNN-COMP instances with known verdicts, fetched from the competition's GitHub repositories (2–4 MB)."));
   return accordion(state, "model", "1 · Model and points", content);
 }
 
@@ -292,6 +302,13 @@ function renderAdvancedSection(ctx) {
 
   if (s.mode === "points") {
     if (ps.task === "classification") {
+      const certLabel = el("label", "checkbox");
+      const certBox = document.createElement("input");
+      certBox.type = "checkbox";
+      certBox.checked = a.certify !== false;
+      certBox.addEventListener("change", () => state.patch("attack", { certify: certBox.checked }));
+      certLabel.append(certBox, " Certify with CROWN before attacking");
+      content.append(certLabel);
       const label = el("label", "checkbox");
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -300,7 +317,7 @@ function renderAdvancedSection(ctx) {
         state.patch("pointsSettings", { searchEpsilon: cb.checked });
         rerender();
       });
-      label.append(cb, " Also find each point's smallest breaking ε (slower)");
+      label.append(cb, " Also find each point's ε range: certified up to, broken from (slower)");
       content.append(label);
       if (ps.searchEpsilon) {
         content.append(numberField({ name: "searchIterations", label: "Bisection steps", value: ps.searchIterations, integer: true, min: 1, onChange: setP("searchIterations") }));
@@ -339,8 +356,8 @@ function renderAdvancedSection(ctx) {
       label: "tf.js backend",
       value: a.backend,
       options: [
-        { value: "cpu", label: "CPU (deterministic)" },
-        { value: "webgl", label: "WebGL (faster, may lose precision)" },
+        { value: "webgl", label: "WebGL (GPU, default)" },
+        { value: "cpu", label: "CPU (bit-for-bit reproducible)" },
       ],
       onChange: setA("backend"),
     }),
@@ -368,6 +385,10 @@ function validateSettings(attack) {
 function progressText(p) {
   if (!p) return "Starting…";
   if (p.phase === "self-test") return "Self-test: comparing the tf.js translation with onnxruntime-web…";
+  if (p.phase === "certify") {
+    const at = p.epsilon !== undefined ? ` at ε = ${formatNumber(p.epsilon, 4)}` : "";
+    return `point ${p.point + 1}/${p.points} · certifying with CROWN${at}`;
+  }
   const step = `step ${p.step}/${p.steps}`;
   if (p.region !== undefined) {
     const where = p.regions > 1 ? `region ${p.region + 1}/${p.regions} · ` : "";
@@ -378,7 +399,8 @@ function progressText(p) {
 }
 
 function progressFraction(p) {
-  if (!p || p.phase !== "attack") return 0;
+  if (!p || (p.phase !== "attack" && p.phase !== "certify")) return 0;
+  if (p.phase === "certify") return p.point / p.points;
   if (p.region !== undefined) return (p.region + p.step / p.steps) / p.regions;
   return (p.point + p.step / p.steps) / p.points;
 }
@@ -419,6 +441,7 @@ async function startRun(ctx) {
     backend: s.attack.backend,
     schedule: s.attack.schedule,
     selfTestSamples: s.attack.selfTestSamples,
+    certify: s.attack.certify !== false,
   };
 
   let type;
@@ -453,6 +476,7 @@ async function startRun(ctx) {
   const meta = {
     model: s.model.fileName,
     property: s.mode === "vnnlib" ? s.vnnlib.fileName : s.points.fileName,
+    imageNames: s.mode === "points" ? s.points.imageNames : undefined,
   };
   // Published verdicts for this exact ε, if the loaded points came with them.
   const ref = s.mode === "points" && s.pointsSettings.task === "classification" ? s.points.reference : null;
@@ -486,7 +510,7 @@ function renderToolbar(ctx) {
   const row = el("div", "toolbar");
   const main = el("div", "toolbar-main");
 
-  const runButton = el("button", "run-button", running ? "Running…" : "Run attack");
+  const runButton = el("button", "run-button", running ? "Running…" : "Run");
   runButton.type = "button";
   runButton.disabled = !ready;
   runButton.addEventListener("click", () => startRun(ctx));
@@ -542,7 +566,7 @@ function reproducibility(result) {
     selfTestMaxRelError: result.selfTest.maxRelError,
     tfjs: TFJS_VERSION,
     onnxruntimeWeb: ORT_VERSION,
-    statement: DISCLAIMER,
+    statement: disclaimerFor(result),
   };
 }
 
@@ -618,11 +642,22 @@ function renderPointsResult(ctx, result) {
   const chips = [];
 
   if (result.task === "classification") {
+    const n = result.rows.length;
+    const pct = (v) => `${(v * 100).toFixed(1)}%`;
+    const certified = sm.certification === "crown";
     chips.push(
-      { label: "Clean accuracy", value: `${(sm.cleanAccuracy * 100).toFixed(1)}%` },
-      { label: `Robust accuracy at ε = ${formatNumber(s.epsilon)} (upper bound)`, value: `${(sm.robustAccuracyUpperBound * 100).toFixed(1)}%` },
-      { label: "Points broken", value: `${sm.brokenCount} / ${result.rows.length}` },
+      { label: "Clean accuracy", value: pct(sm.cleanAccuracy) },
+      certified
+        ? {
+            label: `Robust accuracy at ε = ${formatNumber(s.epsilon)}`,
+            value: sm.robustAccuracyLowerBound === sm.robustAccuracyUpperBound ? pct(sm.robustAccuracyUpperBound) : `${pct(sm.robustAccuracyLowerBound)} – ${pct(sm.robustAccuracyUpperBound)}`,
+            title: "Lower end: points certified robust. Upper end: points without a counterexample.",
+          }
+        : { label: `Robust accuracy at ε = ${formatNumber(s.epsilon)} (upper bound)`, value: pct(sm.robustAccuracyUpperBound) },
     );
+    if (certified) chips.push({ label: "Certified robust", value: `${sm.certifiedCount} / ${n}` });
+    chips.push({ label: "Counterexamples", value: `${sm.brokenCount} / ${n}` });
+    if (certified) chips.push({ label: "Unknown", value: `${sm.unknownCount} / ${n}` });
     if (sm.medianSmallestEpsilon !== null) {
       chips.push({
         label: "Median smallest breaking ε",
@@ -643,6 +678,9 @@ function renderPointsResult(ctx, result) {
   summary.append(createStatGrid(chips));
   const ref = result.meta.reference;
   if (ref) summary.append(renderReferenceComparison(result, ref));
+  if (result.task === "classification" && sm.certification === "unavailable") {
+    summary.append(note(`Certification was not available for this model (${sm.certificationNote}), so only the attack ran: the robust accuracy is an upper bound.`));
+  }
   if (result.task === "regression-lipschitz") {
     summary.append(note("Each value is an empirical lower bound on the local Lipschitz constant (L∞ in, L∞ out): the true constant is at least this large."));
   }
@@ -651,7 +689,7 @@ function renderPointsResult(ctx, result) {
   }
   const warn = selfTestWarning(result);
   if (warn) summary.append(warn);
-  summary.append(el("p", "disclaimer", DISCLAIMER));
+  summary.append(el("p", "disclaimer", disclaimerFor(result)));
   group.append(accordion(state, "result", "Result", summary));
 
   const perPoint = el("div", "page-flow");
@@ -676,10 +714,16 @@ function renderReferenceComparison(result, ref) {
   const robust = ref.verdicts.filter((v) => v === "unsat").length;
   const notRobust = ref.verdicts.filter((v) => v === "sat").length;
   const undecided = n - robust - notRobust;
-  const found = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "sat").length;
-  const foundUndecided = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "unknown").length;
-  const contradictions = result.rows.filter((r, i) => r.broken && ref.verdicts[i] === "unsat").length;
+  const status = (i) => result.rows[i].status;
+  const count = (fn) => result.rows.filter((_, i) => fn(i)).length;
+  const found = count((i) => status(i) === "counterexample" && ref.verdicts[i] === "sat");
+  const certifiedOk = count((i) => status(i) === "certified" && ref.verdicts[i] === "unsat");
+  const decidedUndecided = count((i) => status(i) !== "unknown" && ref.verdicts[i] === "unknown");
+  const contradictions = count(
+    (i) => (status(i) === "counterexample" && ref.verdicts[i] === "unsat") || (status(i) === "certified" && ref.verdicts[i] === "sat"),
+  );
   const pct = (k) => `${((k / n) * 100).toFixed(1)}%`;
+  const certifying = result.summary.certification === "crown";
   const box = el("div", "page-flow");
   box.append(
     createStatGrid([
@@ -687,50 +731,75 @@ function renderReferenceComparison(result, ref) {
         label: "Published robust accuracy (exact)",
         value: undecided ? `${pct(robust)}–${pct(robust + undecided)} (${undecided} undecided)` : `${pct(robust)} (${robust}/${n})`,
       },
-      { label: "Non-robust points found", value: `${found} / ${notRobust}` },
+      ...(certifying ? [{ label: "Published-robust points certified", value: `${certifiedOk} / ${robust}` }] : []),
+      { label: "Published non-robust points found", value: `${found} / ${notRobust}` },
     ]),
   );
   const text = el("p", "section-note");
   text.append(
     "Reference: verdicts of complete verifiers on these points at this ε (",
     Object.assign(el("a", "inline-link", "source"), { href: ref.sourceUrl, target: "_blank", rel: "noopener" }),
-    "). The tool's robust accuracy is an upper bound on the exact value; it matches when every non-robust point is found.",
-    undecided ? ` "Undecided" points timed out for every verifier.` : "",
+    "). The exact robust accuracy lies inside the tool's range; the range is exact when every point is certified or broken.",
+    undecided ? ` "Undecided" points were not solved by any verifier.` : "",
   );
   box.append(text);
-  if (foundUndecided) {
-    box.append(note(`The tool found a counterexample for ${foundUndecided} point(s) that no verifier decided: these points are not robust.`));
+  if (decidedUndecided) {
+    box.append(note(`The tool decided ${decidedUndecided} point(s) that no verifier solved (see the per-point table).`));
   }
   if (contradictions) {
-    box.append(errorText(`${contradictions} counterexample(s) contradict a published proof of robustness. Please report this: it indicates a bug or a mismatch in the input box.`));
+    box.append(errorText(`${contradictions} result(s) contradict a published verdict. Please report this: it indicates a bug or a mismatch in the input box.`));
   }
   return box;
 }
 
 function pointColumns(result) {
   const s = result.settings;
-  const idx = { label: "#", value: (r) => String(r.index + 1) };
+  const names = result.meta.imageNames;
+  const idx = { label: "#", value: (r) => (names ? `${r.index + 1} (${names[r.index]})` : String(r.index + 1)) };
   if (result.task === "classification") {
     const cols = [
       idx,
       { label: "Label", value: (r) => String(r.label) },
       { label: "Clean pred.", value: (r) => String(r.cleanPrediction), className: (r) => (r.cleanCorrect ? "" : "cell-bad") },
-      { label: "Counterexample", value: (r) => (r.broken ? "found" : "none found"), className: (r) => (r.broken ? "cell-bad" : "") },
+      {
+        label: "Result",
+        value: (r) => r.status,
+        className: (r) => (r.status === "counterexample" ? "cell-bad" : r.status === "certified" ? "cell-ok" : ""),
+      },
       { label: "Adv. pred.", value: (r) => (r.broken && r.cleanCorrect ? String(r.counterexample.prediction) : "–") },
-      { label: "Best margin", value: (r) => formatNumber(r.bestMargin, 4) },
     ];
+    if (result.summary.certification === "crown") {
+      cols.push({
+        label: "Margin ≥ (CROWN)",
+        title: "Certified lower bound on the margin over the whole ε-ball; certified when above the float32 tolerance",
+        value: (r) => (r.certifiedBound === undefined ? "–" : formatNumber(r.certifiedBound, 4)),
+      });
+    }
+    cols.push({
+      label: "Margin ≤ (attack)",
+      title: "Smallest margin the attack reached (a concrete input); negative means misclassified",
+      value: (r) => (r.bestMargin === undefined ? "–" : formatNumber(r.bestMargin, 4)),
+    });
     const ref = result.meta.reference;
     if (ref) {
       cols.push({
         label: "Published",
         title: "Verdict of complete verifiers: robust = proven, not robust = a counterexample exists",
         value: (r) => ({ unsat: "robust", sat: "not robust" })[ref.verdicts[r.index]] ?? "undecided",
-        className: (r) => (r.broken && ref.verdicts[r.index] === "unsat" ? "cell-bad" : ""),
+        className: (r) =>
+          (r.status === "counterexample" && ref.verdicts[r.index] === "unsat") || (r.status === "certified" && ref.verdicts[r.index] === "sat") ? "cell-bad" : "",
+      });
+    }
+    if (s.searchEpsilon && result.summary.certification === "crown") {
+      cols.push({
+        label: "Certified ε ≥",
+        title: "Largest ε (by bisection) at which CROWN certifies the point",
+        value: (r) => (r.certifiedRadiusAtLeastEpsilon ? `≥ ${formatNumber(s.epsilon)}` : formatNumber(r.certifiedRadius, 4)),
       });
     }
     if (s.searchEpsilon) {
       cols.push({
-        label: "Smallest ε",
+        label: "Breaking ε ≤",
         title: "Smallest ε at which a counterexample was found (an upper bound on the true minimum)",
         value: (r) => (r.smallestEpsilon === 0 ? "0" : Number.isFinite(r.smallestEpsilon) ? `≤ ${formatNumber(r.smallestEpsilon, 4)}` : `> ${formatNumber(s.epsilon)}`),
       });
@@ -759,7 +828,7 @@ function pointsCsv(result) {
   const esc = (v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const lines = [cols.map((c) => esc(c.label)).join(",")];
   for (const r of result.rows) lines.push(cols.map((c) => esc(c.value(r))).join(","));
-  lines.push("", `# ${DISCLAIMER}`, `# ${JSON.stringify(reproducibility(result), jsonReplacer)}`);
+  lines.push("", `# ${disclaimerFor(result)}`, `# ${JSON.stringify(reproducibility(result), jsonReplacer)}`);
   return lines.join("\n") + "\n";
 }
 

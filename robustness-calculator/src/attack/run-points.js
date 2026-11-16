@@ -1,6 +1,11 @@
 // Mode B: robustness around points (classification, or regression with the
 // standard / Lipschitz notions). Every number reported per point comes from
 // onnxruntime-web outputs evaluated in float64, not from the tf.js attack.
+//
+// Classification: each point is first bounded with CROWN (when the model is a
+// ReLU chain). Certified points are proven robust and skip the attack; the
+// others are attacked. Each point ends up "certified", "counterexample" or
+// "unknown".
 
 import { makeBox, boxContains, clampToBox32, sampleBox32 } from "./box.js";
 import { createRng, deriveRng } from "./rng.js";
@@ -8,7 +13,8 @@ import { runPgd, defaultAlpha } from "./pgd.js";
 import { createClassificationLoss, createTargetedClassificationLoss, createDeviationLoss, createLipschitzLoss } from "./objectives.js";
 import { selfTest } from "../check/ort-check.js";
 import { epsilonBox, median } from "../spec/points.js";
-import { DISCLAIMER } from "./report.js";
+import { disclaimerFor } from "./report.js";
+import { crownMarginLowerBound, FLOAT_TOLERANCE } from "../bounds/crown.js";
 
 const argmax = (y) => y.reduce((best, v, i) => (v > y[best] ? i : best), 0);
 const infNorm = (a, b) => a.reduce((m, v, i) => Math.max(m, Math.abs(v - b[i])), 0);
@@ -18,7 +24,7 @@ function misclassified(y, label) {
   return y.some((v, j) => j !== label && v > y[label]);
 }
 
-export async function runPointsCheck({ tf, model, checker, points, settings, onProgress = () => {} }) {
+export async function runPointsCheck({ tf, model, checker, points, settings, chain = null, chainError = null, onProgress = () => {} }) {
   const t0 = performance.now();
   const { task, epsilon, seed, restarts, steps } = settings;
   const alpha = settings.alpha ?? defaultAlpha(steps);
@@ -44,6 +50,12 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
 
   const rng = createRng(seed);
   const rows = [];
+  const certify = task === "classification" && settings.certify !== false && chain !== null;
+  const certifiedAt = (x, eps, label) => {
+    const { lo, hi } = epsilonBox(x, eps, domainLo, domainHi);
+    const bound = crownMarginLowerBound(chain, lo, hi, label);
+    return { bound, certified: bound > FLOAT_TOLERANCE };
+  };
 
   for (let i = 0; i < points.inputs.length; i++) {
     const progress = (extra) => onProgress({ phase: "attack", point: i, points: points.inputs.length, steps, ...extra });
@@ -60,7 +72,9 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
 
       if (!row.cleanCorrect) {
         row.broken = true;
+        row.status = "counterexample";
         row.smallestEpsilon = 0;
+        row.certifiedRadius = 0;
         row.counterexample = { x: Array.from(xRef), y: Array.from(yRefOrt) };
         row.note = "misclassified without perturbation";
         rows.push(row);
@@ -100,12 +114,43 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
         }
       };
 
+      if (certify) {
+        progress({ phase: "certify" });
+        const c = certifiedAt(points.inputs[i], epsilon, label);
+        row.certifiedBound = c.bound;
+        row.certified = c.certified;
+      }
+
+      if (row.certified) {
+        row.broken = false;
+        row.status = "certified";
+        row.smallestEpsilon = Infinity;
+        row.certifiedRadius = epsilon;
+        if (settings.searchEpsilon) row.certifiedRadiusAtLeastEpsilon = true;
+        rows.push(row);
+        continue;
+      }
+
       const first = await attack(epsilon, boxes[i]);
       row.bestMargin = first.bestMargin;
       row.spurious = first.spurious;
       row.broken = Boolean(first.found);
+      row.status = row.broken ? "counterexample" : "unknown";
       row.counterexample = first.found;
       row.smallestEpsilon = first.found ? epsilon : Infinity;
+
+      if (certify && settings.searchEpsilon) {
+        // Largest ε (by bisection) at which CROWN still certifies the point.
+        let lo = 0;
+        let hi = epsilon;
+        for (let it = 0; it < (settings.searchIterations ?? 8); it++) {
+          const mid = 0.5 * (lo + hi);
+          progress({ phase: "certify", epsilon: mid });
+          if (certifiedAt(points.inputs[i], mid, label).certified) lo = mid;
+          else hi = mid;
+        }
+        row.certifiedRadius = lo;
+      }
 
       if (first.found && settings.searchEpsilon) {
         let lo = 0;
@@ -170,6 +215,14 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
     summary.cleanAccuracy = rows.filter((r) => r.cleanCorrect).length / N;
     summary.robustAccuracyUpperBound = rows.filter((r) => r.cleanCorrect && !r.broken).length / N;
     summary.brokenCount = rows.filter((r) => r.broken).length;
+    summary.certification = certify ? "crown" : task === "classification" && settings.certify !== false ? "unavailable" : "off";
+    summary.certificationNote = chainError;
+    if (certify) {
+      summary.certifiedCount = rows.filter((r) => r.status === "certified").length;
+      summary.unknownCount = rows.filter((r) => r.status === "unknown").length;
+      summary.robustAccuracyLowerBound = summary.certifiedCount / N;
+      summary.medianCertifiedRadius = settings.searchEpsilon ? median(rows.map((r) => r.certifiedRadius)) : null;
+    }
     summary.medianSmallestEpsilon = settings.searchEpsilon ? median(rows.map((r) => r.smallestEpsilon)) : null;
   } else {
     const key = task === "regression-lipschitz" ? "lipschitzLowerBound" : "maxDeviation";
@@ -181,14 +234,15 @@ export async function runPointsCheck({ tf, model, checker, points, settings, onP
     }
   }
 
-  return {
+  const result = {
     mode: "points",
     task,
     rows,
     summary,
     timeMs: performance.now() - t0,
     selfTest: test,
-    settings: { ...settings, alpha, schedule },
-    disclaimer: DISCLAIMER,
+    settings: { ...settings, alpha, schedule, certify, floatTolerance: certify ? FLOAT_TOLERANCE : undefined },
   };
+  result.disclaimer = disclaimerFor(result);
+  return result;
 }
