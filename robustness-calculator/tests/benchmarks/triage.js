@@ -5,6 +5,11 @@
 //   cd robustness-calculator && npm install
 //   node tests/benchmarks/triage.js [--nets=256x6] [--eps=0.03,0.05]
 //        [--budget=60000] [--chains=100] [--p-init=0.8] [--seed=0]
+//        [--images=0,1,...] [--seeds=1]
+//
+// --images limits the run to some images (0–14); --seeds=N repeats the
+// Square Attack with N different seeds (seed, seed+1, ...) to measure how
+// often it succeeds. Example: --eps=0.05 --images=1,7 --seeds=5 --budget=100000
 //
 // Downloads the VNN-COMP 2022 mnist_fc files it needs (pinned commit) into
 // robustness-calculator/.bench-cache/ (git-ignored). For every instance it:
@@ -34,6 +39,8 @@ const BUDGET = Number(arg("budget", 60000));
 const CHAINS = Number(arg("chains", 100));
 const P_INIT = Number(arg("p-init", 0.8));
 const SEED = Number(arg("seed", 0));
+const SEEDS = Number(arg("seeds", 1));
+const IMAGES = arg("images", "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14").split(",").map(Number);
 
 const VERDICTS = {
   "256x2": { "0.03": "ussuuuuuuuuusuu", "0.05": "sssusssusuuusuu" },
@@ -57,10 +64,10 @@ async function cached(path) {
 }
 
 /** L∞ Square Attack on a 28×28 image, CHAINS parallel chains, gradient-free. */
-async function squareAttack(model, checker, xs, lo, hi, label) {
+async function squareAttack(model, checker, xs, lo, hi, label, seed) {
   const n = 784;
   const side = 28;
-  const rng = createRng(SEED);
+  const rng = createRng(seed);
   const iters = Math.max(1, Math.floor(BUDGET / CHAINS));
   const margins = (X, B) =>
     tf.tidy(() => model.forward(tf.tensor2d(X, [B, n])).arraySync().map((r) => r[label] - Math.max(...r.filter((_, k) => k !== label))));
@@ -113,7 +120,7 @@ const rows = [];
 const models = {};
 for (const net of NETS) {
   for (const e of EPSS) {
-    for (let i = 0; i < 15; i++) {
+    for (const i of IMAGES) {
       const verdict = { s: "sat", u: "unsat", "?": "unknown" }[VERDICTS[net][e][i]];
       models[net] ??= await load(new Uint8Array(await cached(`onnx/mnist-net_${net}.onnx.gz`)));
       const { model, checker } = models[net];
@@ -160,65 +167,85 @@ for (const net of NETS) {
       const pgdFound = p.rows[0].broken;
       const pgdBest = p.rows[0].bestMargin;
 
-      let sq = null;
-      let sqTime = 0;
-      if (!pgdFound) {
-        t = Date.now();
-        sq = await squareAttack(model, checker, xs, lo, hi, label);
-        sqTime = (Date.now() - t) / 1000;
-      }
+      for (let k = 0; k < (pgdFound ? 1 : SEEDS); k++) {
+        const seed = SEED + k;
+        let sq = null;
+        let sqTime = 0;
+        if (!pgdFound) {
+          t = Date.now();
+          sq = await squareAttack(model, checker, xs, lo, hi, label, seed);
+          sqTime = (Date.now() - t) / 1000;
+        }
 
-      const row = {
-        net,
-        eps: e,
-        image: i,
-        verdict,
-        cleanMargin: m0,
-        pgdBest,
-        pgdRelDrop: (m0 - pgdBest) / m0,
-        linDropOverMargin: linDrop / m0,
-        pgdFound,
-        pgdTime,
-        squareFoundAt: sq?.foundAt ?? "",
-        squareBest: sq ? sq.best : "",
-        squareBest1k: sq?.at[1000] ?? "",
-        squareBest5k: sq?.at[5000] ?? "",
-        squareBest20k: sq?.at[20000] ?? "",
-        squareTime: sqTime,
-      };
-      rows.push(row);
-      const f = (v) => (typeof v === "number" ? v.toFixed(3) : String(v));
-      console.log(
-        `${net} eps=${e} img=${String(i).padStart(2)} ${verdict.padEnd(7)} ` +
-          `clean=${f(m0)} pgdBest=${f(pgdBest)} drop=${f(row.pgdRelDrop)} linDrop/m=${f(row.linDropOverMargin)} ` +
-          `PGD:${pgdFound ? "found" : "-    "} ` +
-          (sq
-            ? `SQUARE:${sq.foundAt ? `found@${sq.foundAt}` : "-"} best=${f(sq.best)} (1k ${f(sq.at[1000] ?? NaN)}, 5k ${f(sq.at[5000] ?? NaN)}, 20k ${f(sq.at[20000] ?? NaN)})`
-            : "") +
-          ` [${(pgdTime + sqTime).toFixed(1)} s]`,
-      );
+        const row = {
+          net,
+          eps: e,
+          image: i,
+          verdict,
+          cleanMargin: m0,
+          pgdBest,
+          pgdRelDrop: (m0 - pgdBest) / m0,
+          linDropOverMargin: linDrop / m0,
+          pgdFound,
+          pgdTime,
+          squareSeed: sq ? seed : "",
+          squareFoundAt: sq?.foundAt ?? "",
+          squareBest: sq ? sq.best : "",
+          squareBest1k: sq?.at[1000] ?? "",
+          squareBest5k: sq?.at[5000] ?? "",
+          squareBest20k: sq?.at[20000] ?? "",
+          squareTime: sqTime,
+        };
+        rows.push(row);
+        const f = (v) => (typeof v === "number" ? v.toFixed(3) : String(v));
+        console.log(
+          `${net} eps=${e} img=${String(i).padStart(2)} ${verdict.padEnd(7)} ` +
+            `clean=${f(m0)} pgdBest=${f(pgdBest)} drop=${f(row.pgdRelDrop)} linDrop/m=${f(row.linDropOverMargin)} ` +
+            `PGD:${pgdFound ? "found" : "-    "} ` +
+            (sq
+              ? `SQUARE(seed ${seed}):${sq.foundAt ? `found@${sq.foundAt}` : "-"} best=${f(sq.best)} (1k ${f(sq.at[1000] ?? NaN)}, 5k ${f(sq.at[5000] ?? NaN)}, 20k ${f(sq.at[20000] ?? NaN)})`
+              : "") +
+            ` [${(pgdTime + sqTime).toFixed(1)} s]`,
+        );
+      }
     }
   }
 }
 
-// Summary
-const sat = rows.filter((r) => r.verdict === "sat");
+// Summary (one entry per instance: found by Square if any seed found it)
+const byInstance = new Map();
+for (const r of rows) {
+  const key = `${r.net}|${r.eps}|${r.image}`;
+  const prev = byInstance.get(key);
+  byInstance.set(key, prev ? { ...prev, squareFoundAt: prev.squareFoundAt || r.squareFoundAt, squareTime: prev.squareTime + r.squareTime } : { ...r });
+}
+const instances = [...byInstance.values()];
+if (SEEDS > 1) {
+  console.log("\nSquare Attack success rate per instance:");
+  for (const [key, inst] of byInstance) {
+    if (inst.pgdFound) continue;
+    const runs = rows.filter((r) => `${r.net}|${r.eps}|${r.image}` === key);
+    const hits = runs.filter((r) => r.squareFoundAt);
+    console.log(`  ${key.replace(/\|/g, " eps=").replace(/ eps=(\d+)$/, " img=$1")} ${inst.verdict.padEnd(7)} ${hits.length}/${runs.length} seeds` + (hits.length ? ` (queries: ${hits.map((r) => r.squareFoundAt).join(", ")})` : ""));
+  }
+}
+const sat = instances.filter((r) => r.verdict === "sat");
 const pgdOnly = sat.filter((r) => r.pgdFound).length;
 const both = sat.filter((r) => r.pgdFound || r.squareFoundAt).length;
-const falseCe = rows.filter((r) => r.verdict === "unsat" && (r.pgdFound || r.squareFoundAt)).length;
-const newOnUnknown = rows.filter((r) => r.verdict === "unknown" && (r.pgdFound || r.squareFoundAt)).length;
-console.log(`\n${rows.length} instances: ${sat.length} published sat, ${rows.filter((r) => r.verdict === "unsat").length} unsat, ${rows.filter((r) => r.verdict === "unknown").length} unknown`);
+const falseCe = instances.filter((r) => r.verdict === "unsat" && (r.pgdFound || r.squareFoundAt)).length;
+const newOnUnknown = instances.filter((r) => r.verdict === "unknown" && (r.pgdFound || r.squareFoundAt)).length;
+console.log(`\n${instances.length} instances: ${sat.length} published sat, ${instances.filter((r) => r.verdict === "unsat").length} unsat, ${instances.filter((r) => r.verdict === "unknown").length} unknown`);
 console.log(`PGD found ${pgdOnly}/${sat.length}; PGD + Square found ${both}/${sat.length}; counterexamples on published-unsat: ${falseCe}; on unknown: ${newOnUnknown}`);
-console.log(`time: PGD ${rows.reduce((a, r) => a + r.pgdTime, 0).toFixed(0)} s, Square ${rows.reduce((a, r) => a + r.squareTime, 0).toFixed(0)} s`);
+console.log(`time: PGD ${instances.reduce((a, r) => a + r.pgdTime, 0).toFixed(0)} s, Square ${rows.reduce((a, r) => a + r.squareTime, 0).toFixed(0)} s`);
 console.log("\nSignals, PGD-unbroken instances (look for a value that separates Square successes from the rest):");
-for (const r of rows.filter((r) => !r.pgdFound)) {
+for (const r of instances.filter((r) => !r.pgdFound)) {
   console.log(
     `  ${r.net} eps=${r.eps} img=${String(r.image).padStart(2)} ${r.verdict.padEnd(7)} square=${(r.squareFoundAt ? "FOUND" : "-").padEnd(5)} ` +
-      `clean=${r.cleanMargin.toFixed(3)} pgdDrop=${r.pgdRelDrop.toFixed(3)} linDrop/m=${r.linDropOverMargin.toFixed(3)} sq1k=${Number(r.squareBest1k).toFixed(3)} sq5k=${Number(r.squareBest5k).toFixed(3)}`,
+      `clean=${r.cleanMargin.toFixed(3)} pgdDrop=${r.pgdRelDrop.toFixed(3)} linDrop/m=${r.linDropOverMargin.toFixed(3)} sq1k=${r.squareBest1k === "" ? "–" : r.squareBest1k.toFixed(3)} sq5k=${r.squareBest5k === "" ? "–" : r.squareBest5k.toFixed(3)}`,
   );
 }
 
-const out = new URL(`triage-${NETS.join("+")}-${BUDGET}.csv`, CACHE);
+const out = new URL(`triage-${NETS.join("+")}-${BUDGET}-${SEEDS}seeds.csv`, CACHE);
 const cols = Object.keys(rows[0]);
 writeFileSync(out, [cols.join(","), ...rows.map((r) => cols.map((c) => r[c]).join(","))].join("\n") + "\n");
 console.log(`\nCSV: ${out.pathname}`);
