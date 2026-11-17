@@ -1,6 +1,7 @@
 import { renderNav } from "../components/nav.js";
 import { renderCheckPage } from "../pages/check-page.js";
 import { renderMethodPage } from "../pages/method-page.js";
+import { renderResultsPage } from "../pages/results-page.js";
 import { renderMath } from "./math.js";
 
 const routes = {
@@ -11,6 +12,10 @@ const routes = {
   method: {
     label: "Method",
     render: renderMethodPage,
+  },
+  results: {
+    label: "Results",
+    render: renderResultsPage,
   },
 };
 
@@ -68,7 +73,7 @@ export function createRouter(root, state, worker) {
 
     const title = document.createElement("h1");
     title.className = "site-title";
-    title.textContent = "Neural Network Robustness Checker";
+    title.textContent = "ε-Ball Robustness Estimator";
 
     const byline = document.createElement("p");
     byline.className = "site-byline";
@@ -80,7 +85,11 @@ export function createRouter(root, state, worker) {
     byline.append(homepageLink, ")");
     titleRow.append(title, byline);
 
-    header.append(headerTop, titleRow, renderNav(routes, activeRoute));
+    const subtitle = document.createElement("p");
+    subtitle.className = "site-subtitle";
+    subtitle.textContent = "Certified and attack bounds for neural network classifiers, in your browser";
+
+    header.append(headerTop, titleRow, subtitle, renderNav(routes, activeRoute));
 
     const pageRoot = document.createElement("main");
     pageRoot.className = "page-stack";

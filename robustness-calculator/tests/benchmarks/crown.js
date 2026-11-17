@@ -2,7 +2,7 @@
 // benchmarks against their published verdicts.
 //
 //   cd robustness-calculator && npm install
-//   node tests/benchmarks/crown.js [--benchmarks=mnist_fc-256x6,cora-set] [--eps=0.03,0.05]
+//   node tests/benchmarks/crown.js [--benchmarks=mnist_fc-256x6,cora-mnist-set] [--eps=0.03,0.05]
 //
 // Defaults: every benchmark in src/spec/benchmark.js, at every ε with
 // published verdicts, with the page's default attack settings. Files are
@@ -65,8 +65,8 @@ for (const b of BENCHMARKS.filter((b) => !only || only.includes(b.id))) {
         steps: 50,
         schedule: "apgd",
         selfTestSamples: 20,
-        domainLo: new Array(784).fill(0),
-        domainHi: new Array(784).fill(1),
+        domainLo: new Array(model.inputSize).fill(0),
+        domainHi: new Array(model.inputSize).fill(1),
       },
     });
     const line = r.rows.map((row, i) => {

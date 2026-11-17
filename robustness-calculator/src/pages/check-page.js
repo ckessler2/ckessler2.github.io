@@ -129,10 +129,10 @@ async function loadBenchmark(ctx, id) {
     const decoder = new TextDecoder();
     const points = props.map((b) => pointFromProperty(decoder.decode(b), bench.propertyEpsilon, { snap: bench.snapPixels }));
     const csv = pointsCsvText(points, [
-      `${bench.label}: ${points.length} MNIST test images and labels, recovered from the benchmark's properties (${bench.imageNames.join(" ")}).`,
+      `${bench.label}: ${points.length} images and labels, recovered from the benchmark's properties (${bench.imageNames.join(" ")}).`,
       `Source: ${bench.modelUrl.replace(/\/onnx\/.*/, "")}`,
     ]);
-    loadPointsText(ctx, `${bench.label} (images)`, csv);
+    loadPointsText(ctx, "benchmark images", csv);
     state.patch("points", { reference: bench.reference, imageNames: bench.imageNames });
     state.patch("pointsSettings", { task: "classification", searchEpsilon: false, ...bench.settings });
     await loadModelBytes(ctx, bench.modelName, modelBytes);
@@ -180,9 +180,7 @@ function renderModelSection(ctx) {
     if (ms.extraOutputs.length) {
       content.append(note(`The model has several outputs; only "${ms.outputName}" is checked.`));
     }
-    content.append(
-      note(ms.certifiable ? "Certification (CROWN): available for this model." : `Certification (CROWN): not available: ${ms.certifyNote}. Only the attack will run.`),
-    );
+    if (!ms.certifiable) content.append(note(`Certification is not available for this model (${ms.certifyNote}); only the attack will run.`));
   }
 
   if (s.mode === "vnnlib") {
@@ -211,14 +209,13 @@ function renderModelSection(ctx) {
     content.append(
       createFileInput({
         accept: ".csv,.txt,.gz",
-        label: "Points (.csv)",
+        label: "Points (.csv: inputs, then label)",
         fileName: s.points?.fileName && `${s.points.fileName} (${s.points.rows} rows)`,
         onFile: async (file) => {
           loadPointsText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
           rerender();
         },
       }),
-      note("CSV: one point per row, the input features, then the class label."),
     );
   }
 
@@ -236,7 +233,7 @@ function renderModelSection(ctx) {
   b.type = "button";
   b.addEventListener("click", () => loadBenchmark(ctx, state.getState().benchmarkId ?? BENCHMARKS[0].id));
   examples.append(b);
-  content.append(benchField, examples, note("Published VNN-COMP instances with known verdicts, fetched from the competition's GitHub repositories (2–4 MB)."));
+  content.append(benchField, examples);
   return accordion(state, "model", "1 · Model and points", content);
 }
 
@@ -263,7 +260,7 @@ function renderPropertySection(ctx) {
         rerender();
       },
     }),
-    numberField({ name: "epsilon", label: "ε (L∞ radius)", value: ps.epsilon, onChange: set("epsilon") }),
+    numberField({ name: "epsilon", label: "ε (L∞, in the model's input units)", value: ps.epsilon, onChange: set("epsilon") }),
   );
   if (ps.task === "regression-standard") {
     content.append(numberField({ name: "delta", label: "δ (allowed output change, L∞)", value: ps.delta, onChange: set("delta") }));
@@ -271,7 +268,6 @@ function renderPropertySection(ctx) {
   if (ps.task === "regression-lipschitz") {
     content.append(numberField({ name: "lipschitz", label: "L (allowed Lipschitz constant, L∞→L∞)", value: ps.lipschitz, onChange: set("lipschitz") }));
   }
-  content.append(note("ε is in the model's own input units: if the model expects normalised inputs, ε is normalised too."));
   return accordion(state, "property", "2 · Robustness", content);
 }
 
@@ -362,10 +358,7 @@ function renderAdvancedSection(ctx) {
       onChange: setA("backend"),
     }),
   );
-  content.append(
-    grid,
-    note("Each restart starts uniformly at random in the box; the box centre and the corner the gradient points to are always tried as well."),
-  );
+  content.append(grid);
   return accordion(state, "advanced", "Advanced", content, false);
 }
 
@@ -674,7 +667,7 @@ function renderPointsResult(ctx, result) {
       chips.push({ label: lip ? `Exceed L = ${formatNumber(s.lipschitz)}` : `Exceed δ = ${formatNumber(s.delta)}`, value: `${sm.failCount} / ${result.rows.length}` });
     }
   }
-  chips.push({ label: "Time", value: formatTime(result.timeMs) }, { label: "Self-test max rel. error", value: formatNumber(result.selfTest.maxRelError, 3) });
+  chips.push({ label: "Time", value: formatTime(result.timeMs) });
   summary.append(createStatGrid(chips));
   const ref = result.meta.reference;
   if (ref) summary.append(renderReferenceComparison(result, ref));
@@ -689,7 +682,7 @@ function renderPointsResult(ctx, result) {
   }
   const warn = selfTestWarning(result);
   if (warn) summary.append(warn);
-  summary.append(el("p", "disclaimer", disclaimerFor(result)));
+  if (sm.certification !== "crown") summary.append(el("p", "disclaimer", disclaimerFor(result)));
   group.append(accordion(state, "result", "Result", summary));
 
   const perPoint = el("div", "page-flow");
@@ -737,10 +730,9 @@ function renderReferenceComparison(result, ref) {
   );
   const text = el("p", "section-note");
   text.append(
-    "Reference: verdicts of complete verifiers on these points at this ε (",
+    "Published verdicts of complete verifiers (",
     Object.assign(el("a", "inline-link", "source"), { href: ref.sourceUrl, target: "_blank", rel: "noopener" }),
-    "). The exact robust accuracy lies inside the tool's range; the range is exact when every point is certified or broken.",
-    undecided ? ` "Undecided" points were not solved by any verifier.` : "",
+    ").",
   );
   box.append(text);
   if (decidedUndecided) {
@@ -870,11 +862,15 @@ export function renderCheckPage(ctx) {
   } else {
     const intro = el("div", "panel");
     intro.append(
-      el("p", "", "Load the benchmark, or your own ONNX classifier and a CSV of points, then run the attack. Everything runs in your browser; nothing is uploaded."),
+      el(
+        "p",
+        "",
+        "Load a benchmark, or your own ONNX classifier and points, then press Run. Each point is certified robust, shown not robust by a counterexample, or left unknown, so robust accuracy comes out as a range.",
+      ),
       el(
         "p",
         "section-note",
-        "The tool searches for counterexamples with projected gradient descent. A counterexample proves the network is not robust; finding none proves nothing. See the Method tab.",
+        "On every published VNN-COMP benchmark we tried, the range contains the published result, and on some it matches exactly. It is an estimate, not a replacement for a complete verifier. Everything runs in your browser.",
       ),
     );
     results.append(intro);

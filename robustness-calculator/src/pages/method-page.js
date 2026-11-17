@@ -1,41 +1,5 @@
 import { SUPPORTED_OPS } from "../onnx/translate.js";
-
-function el(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-function para(...parts) {
-  const p = el("p");
-  for (const part of parts) {
-    if (typeof part === "string") p.append(part);
-    else p.append(part);
-  }
-  return p;
-}
-
-function code(text) {
-  return el("code", "", text);
-}
-
-function link(href, text) {
-  const a = el("a", "inline-link", text);
-  a.href = href;
-  return a;
-}
-
-function list(items) {
-  const ul = el("ul", "bullet-list");
-  for (const item of items) {
-    const li = el("li");
-    if (Array.isArray(item)) li.append(...item);
-    else li.append(item);
-    ul.append(li);
-  }
-  return ul;
-}
+import { el, para, code, link, list } from "../components/prose.js";
 
 export function renderMethodPage({ renderMath }) {
   const card = el("article", "page-card prose");
@@ -66,6 +30,7 @@ export function renderMethodPage({ renderMath }) {
       "Neither method is complete. Certification is sound but can fail to prove robust points robust; the attack can miss counterexamples. An unknown point may be either. Only a complete verifier (for example α,β-CROWN or Marabou) is guaranteed to decide every point.",
     ),
     para("Everything runs in your browser. Nothing is uploaded; the built-in benchmarks are downloaded from GitHub."),
+    para("How well this works on published benchmarks is shown on the ", link("#/results", "Results"), " tab."),
 
     el("h2", "", "Certification (CROWN)"),
     para(
@@ -126,7 +91,7 @@ export function renderMethodPage({ renderMath }) {
 
     el("h2", "", "Built-in benchmarks"),
     para(
-      "These are published VNN-COMP instances, fetched from the competition's repositories (pinned commits). Each property file defines a box clip(x ± ε, 0, 1) around an MNIST test image, and the image and label are recovered from it. The 2022 images are snapped to k/255; the 2025 images are the box centres.",
+      "These are published VNN-COMP instances, fetched from the competition's repositories (pinned commits). Each property file defines a box clip(x ± ε, 0, 1) around a test image, and the image and label are recovered from it. The 2022 images are snapped to k/255; the 2025 images are the box centres.",
     ),
     list([
       [
@@ -135,22 +100,15 @@ export function renderMethodPage({ renderMath }) {
         ", Section 4.9 and Table 27).",
       ],
       [
-        "VNN-COMP 2025 cora_2024: 784 → 7 × 250 ReLUs → 10, three models, named point, trades and set; the report describes the training as standard, interval-bound propagation and set-based; 20 images at ε = 0.1 (",
+        "VNN-COMP 2025 cora_2024: a 7 × 250 ReLU network for MNIST, SVHN and CIFAR-10, each in three models named point, trades and set (the report describes the training as standard, interval-bound propagation and set-based); 20 images each, at ε = 0.1 (MNIST, SVHN) and 2/255 (CIFAR-10) (",
         link("https://arxiv.org/abs/2512.19007", "report"),
         ", Section 0.4.19).",
       ],
+      "VNN-COMP 2025 malbeware: a linear classifier of 64 × 64 malware images into 25 families; 14–19 images at each of ε = 1/255, 2/255 and 3/255. The benchmark's two convolutional models are not included.",
     ]),
     para(
       "Each instance comes with the published verdict of the competition's complete verifiers: robust, not robust, or undecided (every verifier timed out). Where verifiers disagreed, the instance is recorded as not robust, because a counterexample was submitted and the opposing claims were penalised. The verdicts appear next to the tool's results, and any contradiction is flagged.",
     ),
-
-    el("h2", "", "Validation"),
-    list([
-      "Built-in benchmarks, default settings (150 points in 9 network/ε settings): no contradiction with any published verdict. The tool certified 48 of the 90 published-robust points and found counterexamples for 36 of the 39 published-non-robust points. In every setting, the tool's robust-accuracy range contains the published value. On the set-trained CORA network it is exact (95.0%). Certification works well at ε = 0.03 (60–67% of points certified) and on the set-trained network, and certifies almost nothing on the 2022 networks at ε = 0.05. None of the 21 published-undecided points was decided.",
-      "Small 2-input network with exact ground truth (branch and bound): the attack finds every non-robust point, the breaking ε is never below the exact value and at most 0.7% above it, and CROWN certifies 134 of 142 robust (point, ε) pairs and never a non-robust one.",
-      "Translation: it agrees with onnxruntime-web to within 2·10⁻⁵ relative on all 45 ACAS Xu networks, and the merged layer chain matches onnxruntime on the benchmark networks and on ACAS Xu.",
-      "The checks can be rerun with the scripts in tests/benchmarks/ (crown.js for the table above).",
-    ]),
 
     el("h2", "", "Other modes"),
     list([

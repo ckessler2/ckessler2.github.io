@@ -1,11 +1,15 @@
-# Neural network robustness checker
+# ε-Ball Robustness Estimator
+
+*Certified and attack bounds for neural network classifiers, in your browser.*
 
 A static, client-side tool that checks ε-ball robustness of ONNX classifiers.
 For each point it either **certifies** robustness with CROWN (a bound
 propagation method), finds a **counterexample** with a gradient attack (PGD
 with the APGD step schedule), or reports **unknown**. Robust accuracy is
 reported as a range: certified share ≤ exact value ≤ share without a
-counterexample. Nothing is uploaded and nothing needs installing. The
+counterexample. On every published VNN-COMP benchmark tried, the range
+contains the published result, and on some it matches exactly. Nothing is
+uploaded and nothing needs installing. The
 original plan is in `robustness_checker_brief.md`; the page's **Method** tab
 documents the method in full.
 
@@ -34,14 +38,15 @@ inputs, ε is normalised too.
 
 ## Built-in benchmarks
 
-Published VNN-COMP instances, fetched on demand from the competition
+Published VNN-COMP ε-ball classification instances (15 benchmarks, 18 settings), fetched on demand from the competition
 repositories (pinned commits) and shown next to their published verdicts.
 None of the files are hosted here.
 
 | Benchmark | Network | Points | ε |
 |---|---|---|---|
 | VNN-COMP 2022 `mnist_fc` | 784 → 6, 4 or 2 × 256 ReLU → 10 | 15 MNIST images | 0.03, 0.05 |
-| VNN-COMP 2025 `cora_2024` | 784 → 7 × 250 ReLU → 10 (models `set`, `point`, `trades`) | 20 MNIST images | 0.1 |
+| VNN-COMP 2025 `cora_2024` | 7 × 250 ReLU (models `set`, `point`, `trades`) for MNIST, SVHN, CIFAR-10 | 20 images each | 0.1 (MNIST, SVHN), 2/255 (CIFAR-10) |
+| VNN-COMP 2025 `malbeware` | linear, 64 × 64 → 25 malware families | 14–19 images per ε | 1/255, 2/255, 3/255 |
 
 **Where the images come from:** they are recovered from the property files.
 Each box is clip(x ± ε, 0, 1). The 2022 pixels are snapped to k/255; the 2025
@@ -65,23 +70,11 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 | Check | Result |
 |---|---|
 | Unit tests (`npm test`) | 30/30 pass |
-| Built-in benchmarks, default settings: 150 points in 9 network/ε settings (`node tests/benchmarks/crown.js`) | 0 contradictions with published verdicts. Certified 48/90 published-robust points; counterexamples for 36/39 published-non-robust points. The tool's range contains the published robust accuracy in all 9 settings, and is exact on CORA `set` (95.0%). |
+| Built-in benchmarks, default settings: 320 points in 18 network/ε settings (`node tests/benchmarks/crown.js`) | 0 contradictions with published verdicts. Certified 98/142 published-robust points; counterexamples for 145/150 published-non-robust points. The tool's range contains the published robust accuracy in all 18 settings, and equals the published value or range in 10 of them. |
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
 | Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks. The CROWN layer chain matches onnxruntime on the benchmark networks and ACAS Xu. |
 
-Per benchmark, at the defaults:
-
-| Benchmark | ε | Tool's robust-accuracy range | Published |
-|---|---|---|---|
-| `mnist_fc` 6×256 | 0.03 | 60.0–93.3% | 93.3% |
-| `mnist_fc` 6×256 | 0.05 | 0.0–93.3% | 80.0–86.7% |
-| `mnist_fc` 4×256 | 0.03 | 66.7–93.3% | 93.3% |
-| `mnist_fc` 4×256 | 0.05 | 0.0–80.0% | 80.0% |
-| `mnist_fc` 2×256 | 0.03 | 60.0–86.7% | 80.0% |
-| `mnist_fc` 2×256 | 0.05 | 6.7–53.3% | 46.7% |
-| CORA `set` | 0.1 | 95.0–95.0% | 95.0% |
-| CORA `point` | 0.1 | 0.0–10.0% | 0.0–10.0% |
-| CORA `trades` | 0.1 | 0.0–90.0% | 0.0–90.0% |
+The per-benchmark table is on the page's **Results** tab (`src/pages/results-page.js`).
 
 Further scripts in `tests/benchmarks/`:
 
