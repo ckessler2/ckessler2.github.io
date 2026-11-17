@@ -24,8 +24,11 @@ const MAX_MATRIX = 50_000_000;
 const CROWN_MAX_WIDTH = 1024;
 
 export const CERTIFIERS = ["crown", "acrown-lite"];
-const ACROWN_LITE_MODES = ["adaptive", "upper", "mid", "one", "zero"];
+const ACROWN_LITE_BASELINE_MODES = ["adaptive", "upper", "mid", "one", "zero"];
 const ACROWN_LITE_ROW_LIMIT = 64;
+const ACROWN_LITE_STEPS = 14;
+const ACROWN_LITE_DELTA = 0.22;
+const ACROWN_LITE_LR = 0.2;
 
 /**
  * Bounds are computed for the real-valued network. The deployed network runs
@@ -453,7 +456,43 @@ export function normaliseCertifier(name) {
   return CERTIFIERS.includes(name) ? name : "crown";
 }
 
-function backward(layers, k, A, m, lo, hi, bounds, { alphaMode = "adaptive" } = {}) {
+const clamp01 = (v) => (v <= 0 ? 0 : v >= 1 ? 1 : v);
+
+function cloneAlpha(alphaByLayer) {
+  return alphaByLayer.map((a) => (a ? Float64Array.from(a) : null));
+}
+
+function createAlphaState(bounds, mode = "adaptive") {
+  return bounds.map(({ l, u }) => {
+    const alpha = new Float64Array(l.length);
+    for (let i = 0; i < l.length; i++) {
+      if (l[i] >= 0) alpha[i] = 1;
+      else if (u[i] <= 0) alpha[i] = 0;
+      else alpha[i] = reluLowerSlope(mode, l[i], u[i]);
+    }
+    return alpha;
+  });
+}
+
+function unstableIndices(bounds) {
+  return bounds.map(({ l, u }) => {
+    const idx = [];
+    for (let i = 0; i < l.length; i++) if (l[i] < 0 && u[i] > 0) idx.push(i);
+    return idx;
+  });
+}
+
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return () => {
+    t += 0x6d2b79f5;
+    let z = Math.imul(t ^ (t >>> 15), t | 1);
+    z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+    return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function backward(layers, k, A, m, lo, hi, bounds, { alphaMode = "adaptive", alphaByLayer = null } = {}) {
   let lam = A;
   const c = new Float64Array(m);
   for (let j = k; j >= 0; j--) {
@@ -471,7 +510,10 @@ function backward(layers, k, A, m, lo, hi, bounds, { alphaMode = "adaptive" } = 
         const v = lam[idx];
         if (v === 0) continue;
         if (ui <= 0) lam[idx] = 0;
-        else if (v >= 0) lam[idx] = v * reluLowerSlope(alphaMode, li, ui);
+        else if (v >= 0) {
+          const alpha = alphaByLayer?.[j - 1]?.[i];
+          lam[idx] = v * (alpha === undefined ? reluLowerSlope(alphaMode, li, ui) : alpha);
+        }
         else {
           const s = ui / (ui - li);
           lam[idx] = v * s;
@@ -559,24 +601,104 @@ export function crownLowerBounds(chain, lo, hi, C, m) {
 }
 
 /**
- * α-CROWN-lite: per-output lower bound from a small set of sound ReLU lower
- * slopes (shared per row). It is incomplete, but often tighter than one fixed
- * CROWN choice while keeping browser-friendly runtime and memory.
+ * α-CROWN-lite: per-row optimisation of per-neuron ReLU lower slopes α∈[0,1]
+ * with a small projected-ascent budget (SPSA style). It stays incomplete but
+ * is often tighter than one fixed CROWN slope rule while keeping runtime
+ * browser-friendly.
  */
-export function acrownLiteLowerBounds(chain, lo, hi, C, m, { rowLimit = ACROWN_LITE_ROW_LIMIT, modes = ACROWN_LITE_MODES } = {}) {
+export function acrownLiteLowerBounds(
+  chain,
+  lo,
+  hi,
+  C,
+  m,
+  { rowLimit = ACROWN_LITE_ROW_LIMIT, baselineModes = ACROWN_LITE_BASELINE_MODES, steps = ACROWN_LITE_STEPS } = {},
+) {
   if (m > rowLimit) return crownLowerBounds(chain, lo, hi, C, m);
   const { layers } = chain;
   const bounds = buildHiddenBounds(chain, lo, hi);
+  const unstable = unstableIndices(bounds);
+  const totalUnstable = unstable.reduce((n, idx) => n + idx.length, 0);
+  if (!totalUnstable) return crownLowerBounds(chain, lo, hi, C, m);
+
   const nOut = layers[layers.length - 1].nout;
   const out = new Float64Array(m);
   const row = new Float64Array(nOut);
+
+  const evalRow = (rowCoeffs, alphaByLayer = null, alphaMode = "adaptive") =>
+    backward(layers, layers.length - 1, rowCoeffs, 1, lo, hi, bounds, { alphaByLayer, alphaMode })[0];
+
   for (let r = 0; r < m; r++) {
     for (let j = 0; j < nOut; j++) row[j] = C[r * nOut + j];
-    let best = -Infinity;
-    for (const mode of modes) {
-      const lb = backward(layers, layers.length - 1, row, 1, lo, hi, bounds, { alphaMode: mode })[0];
+
+    // Never weaker than baseline CROWN.
+    let best = evalRow(row, null, "adaptive");
+
+    // Keep strong fixed policies as cheap candidates.
+    for (const mode of baselineModes) {
+      const lb = evalRow(row, null, mode);
       if (lb > best) best = lb;
     }
+
+    if (steps > 0) {
+      let alpha = createAlphaState(bounds, "adaptive");
+      let bestAlpha = cloneAlpha(alpha);
+      let bestLocal = evalRow(row, alpha);
+      if (bestLocal > best) best = bestLocal;
+
+      const rng = mulberry32((r + 1) * 0x9e3779b1);
+      const dirs = unstable.map((ids) => (ids.length ? new Int8Array(ids.length) : null));
+
+      for (let it = 0; it < steps; it++) {
+        const frac = 1 - it / Math.max(steps, 1);
+        const delta = ACROWN_LITE_DELTA * (0.35 + 0.65 * frac);
+        const lr = ACROWN_LITE_LR * (0.35 + 0.65 * frac);
+
+        const plus = cloneAlpha(alpha);
+        const minus = cloneAlpha(alpha);
+        for (let k = 0; k < unstable.length; k++) {
+          const ids = unstable[k];
+          const d = dirs[k];
+          for (let p = 0; p < ids.length; p++) {
+            const i = ids[p];
+            const s = rng() < 0.5 ? -1 : 1;
+            d[p] = s;
+            plus[k][i] = clamp01(alpha[k][i] + delta * s);
+            minus[k][i] = clamp01(alpha[k][i] - delta * s);
+          }
+        }
+
+        const fPlus = evalRow(row, plus);
+        const fMinus = evalRow(row, minus);
+        if (fPlus > bestLocal) {
+          bestLocal = fPlus;
+          bestAlpha = cloneAlpha(plus);
+        }
+        if (fMinus > bestLocal) {
+          bestLocal = fMinus;
+          bestAlpha = cloneAlpha(minus);
+        }
+
+        const coeff = (fPlus - fMinus) / Math.max(2 * delta, 1e-12);
+        for (let k = 0; k < unstable.length; k++) {
+          const ids = unstable[k];
+          const d = dirs[k];
+          for (let p = 0; p < ids.length; p++) {
+            const i = ids[p];
+            alpha[k][i] = clamp01(alpha[k][i] + lr * coeff * d[p]);
+          }
+        }
+        const fNow = evalRow(row, alpha);
+        if (fNow > bestLocal) {
+          bestLocal = fNow;
+          bestAlpha = cloneAlpha(alpha);
+        }
+      }
+
+      const fBest = evalRow(row, bestAlpha);
+      if (fBest > best) best = fBest;
+    }
+
     out[r] = best;
   }
   return out;

@@ -8,12 +8,6 @@ import { BENCHMARKS } from "../spec/benchmark.js";
 // K = 200 for regression properties). Each row:
 // [benchmark, setting, instances, certified, counterexamples, unknown, tool's range, published].
 const CLASSIFICATION = [
-    ["2022 mnist_fc, 6×256", "0.03", 15, 9, 1, 5, "60.0–93.3%", "93.3%"],
-    ["2022 mnist_fc, 6×256", "0.05", 15, 0, 1, 14, "0.0–93.3%", "80.0–86.7%"],
-    ["2022 mnist_fc, 4×256", "0.03", 15, 11, 1, 3, "73.3–93.3%", "93.3%"],
-    ["2022 mnist_fc, 4×256", "0.05", 15, 0, 3, 12, "0.0–80.0%", "80.0%"],
-    ["2022 mnist_fc, 2×256", "0.03", 15, 9, 2, 4, "60.0–86.7%", "80.0%"],
-    ["2022 mnist_fc, 2×256", "0.05", 15, 1, 7, 7, "6.7–53.3%", "46.7%"],
     ["2025 CORA MNIST, set", "0.1", 20, 19, 1, 0, "95.0%", "95.0%"],
     ["2025 CORA MNIST, point", "0.1", 20, 0, 18, 2, "0.0–10.0%", "0.0–10.0%"],
     ["2025 CORA MNIST, trades", "0.1", 20, 0, 2, 18, "0.0–90.0%", "0.0–90.0%"],
@@ -26,6 +20,12 @@ const CLASSIFICATION = [
     ["2025 MalBeWare, linear", "1/255", 14, 14, 0, 0, "100.0%", "100.0%"],
     ["2025 MalBeWare, linear", "2/255", 19, 19, 0, 0, "100.0%", "100.0%"],
     ["2025 MalBeWare, linear", "3/255", 17, 16, 1, 0, "94.1%", "94.1%"],
+    ["2022 mnist_fc, 6×256", "0.03", 15, 9, 1, 5, "60.0–93.3%", "93.3%"],
+    ["2022 mnist_fc, 6×256", "0.05", 15, 0, 1, 14, "0.0–93.3%", "80.0–86.7%"],
+    ["2022 mnist_fc, 4×256", "0.03", 15, 11, 1, 3, "73.3–93.3%", "93.3%"],
+    ["2022 mnist_fc, 4×256", "0.05", 15, 0, 3, 12, "0.0–80.0%", "80.0%"],
+    ["2022 mnist_fc, 2×256", "0.03", 15, 9, 2, 4, "60.0–86.7%", "80.0%"],
+    ["2022 mnist_fc, 2×256", "0.05", 15, 1, 7, 7, "6.7–53.3%", "46.7%"],
 ];
 
 const REGRESSION = [
@@ -86,8 +86,8 @@ function benchmarkSection({ title, intro, rows, task, words, notes }) {
     el("h2", "", title),
     para(intro(rows.length, n)),
     createStatGrid([
-      { label: "Tool's range contains published answer", value: `${rows.length} of ${rows.length} benchmark cases (table rows)` },
-      { label: "Exact match (or exact published range)", value: `${exact} of ${rows.length} benchmark cases (table rows)` },
+      { label: "Result overlaps published answer", value: "100% of benchmark cases" },
+      { label: "Results match published answer", value: `${((exact / rows.length) * 100).toFixed(1)}% of benchmark cases` },
       {
         label: "Published answers recovered",
         value: `${((tool.certified / published.certified) * 100).toFixed(1)}% of published ${words.safe} cases · ${((tool.counterexample / published.counterexample) * 100).toFixed(1)}% of published ${words.unsafe} cases`,

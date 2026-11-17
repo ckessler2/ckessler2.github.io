@@ -175,9 +175,6 @@ function reachProb(net, names, codes) {
 }
 
 export const BENCHMARKS = [
-  mnistFc("6×256", "256x6", "uuuuuusuuuuuuuu", "usuuuus?uuuuuuu"),
-  mnistFc("4×256", "256x4", "usuuuuuuuuuuuuu", "usuuuususuuuuuu"),
-  mnistFc("2×256", "256x2", "ussuuuuuuuuusuu", "sssusssusuuusuu"),
   cora("mnist", "set", "uuuuuuuuuuuuuuusuuuu"),
   cora("mnist", "point", "sss?ssssssssss?sssss"),
   cora("mnist", "trades", "s???????????????s???"),
@@ -207,6 +204,9 @@ export const BENCHMARKS = [
     "Agent.FYI_label-1_eps-3_idx-8", "Allaple.A_label-2_eps-3_idx-12", "Malex.gen!J_label-16_eps-3_idx-82", "Allaple.L_label-3_eps-3_idx-16",
     "VB.AT_label-22_eps-3_idx-111",
   ], "uuuuuuuuuusuuuuuu"),
+  mnistFc("6×256", "256x6", "uuuuuusuuuuuuuu", "usuuuus?uuuuuuu"),
+  mnistFc("4×256", "256x4", "usuuuuuuuuuuuuu", "usuuuususuuuuuu"),
+  mnistFc("2×256", "256x2", "ussuuuuuuuuusuu", "sssusssusuuusuu"),
   collins("NN_rul_small_window_20", "small, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
   collins("NN_rul_small_window_20", "small, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
   collins("NN_rul_small_window_20", "small, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),

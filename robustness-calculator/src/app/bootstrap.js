@@ -10,7 +10,7 @@ const state = createAppState({
   useDarkMode: false,
   accordionState: {},
   mode: "points",
-  benchmarkId: "mnist_fc-256x6",
+  benchmarkId: "cora-mnist-set",
   model: null, // { fileName, bytes, summary, error, loading }
   vnnlib: null, // { fileName, text, summary, error }
   points: null, // { fileName, text, rows, error }
