@@ -6,7 +6,7 @@ import { renderMath } from "./math.js";
 
 const routes = {
   check: {
-    label: "Checker",
+    label: "Tool",
     render: renderCheckPage,
   },
   method: {

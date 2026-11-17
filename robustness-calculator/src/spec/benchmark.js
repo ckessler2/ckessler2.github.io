@@ -25,6 +25,7 @@ const decode = (codes) => Array.from(codes, (c) => ({ s: "sat", u: "unsat", "?":
 function mnistFc(layersLabel, net, codes003, codes005) {
   return {
     id: `mnist_fc-${net}`,
+    task: "classification",
     label: `VNN-COMP 2022 mnist_fc: ${layersLabel} ReLU network`,
     modelName: `mnist-net_${net}.onnx`,
     modelUrl: `${VNN2022}/onnx/mnist-net_${net}.onnx.gz`,
@@ -55,6 +56,7 @@ function cora(dataset, kind, codes) {
   const d = CORA[dataset];
   return {
     id: `cora-${dataset}-${kind}`,
+    task: "classification",
     label: `VNN-COMP 2025 CORA: ${d.name} 7×250 ReLU, ${CORA_MODELS[kind]}`,
     modelName: `${dataset}-${kind}.onnx`,
     modelUrl: `${VNN2025}/onnx/${dataset}-${kind}.onnx.gz`,
@@ -77,6 +79,7 @@ function malbeware(k, files, codes) {
   const eps = k / 255;
   return {
     id: `malbeware-linear-eps${k}`,
+    task: "classification",
     label: `VNN-COMP 2025 MalBeWare: linear 64×64 → 25 classes, ε = ${k}/255`,
     modelName: "malware_malimg_family_scaled_linear-25.onnx",
     modelUrl: `${VNN2025_MAL}/onnx/malware_malimg_family_scaled_linear-25.onnx.gz`,

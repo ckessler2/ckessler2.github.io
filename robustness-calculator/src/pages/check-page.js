@@ -68,10 +68,6 @@ function textField({ name, label, value, placeholder, onChange }) {
   return wrapper;
 }
 
-function describeShape(shape) {
-  return `[${shape.map((d) => (d === null ? "?" : d)).join(", ")}]`;
-}
-
 // ---------------------------------------------------------------------------
 // Loading files
 
@@ -145,17 +141,63 @@ async function loadBenchmark(ctx, id) {
 // ---------------------------------------------------------------------------
 // Controls
 
-function renderModelSection(ctx) {
+function renderSetupSection(ctx) {
   const { state, rerender } = ctx;
   const s = state.getState();
   const { model } = s;
+  const ps = s.pointsSettings;
+  const set = (key) => (v) => state.patch("pointsSettings", { [key]: v });
   const content = el("div", "page-flow");
 
+  // 1. Robustness type (VNNLIB mode takes its property from the file instead).
+  if (s.mode === "vnnlib") {
+    content.append(note("The property comes from the VNNLIB file (untested mode; switch back under Advanced)."));
+  } else {
+    content.append(
+      selectField({
+        name: "task",
+        label: "Robustness type",
+        value: ps.task,
+        options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
+        onChange: (v) => {
+          state.patch("pointsSettings", { task: v });
+          rerender();
+        },
+      }),
+    );
+
+    // 2. Built-in benchmarks of this type (loading one fills in the model and points).
+    const benches = BENCHMARKS.filter((bm) => bm.task === ps.task);
+    if (benches.length) {
+      const current = benches.some((bm) => bm.id === s.benchmarkId) ? s.benchmarkId : benches[0].id;
+      const benchField = selectField({
+        name: "benchmark",
+        label: "Benchmark",
+        value: current,
+        options: benches.map((bm) => ({ value: bm.id, label: bm.label })),
+        onChange: (v) => state.set("benchmarkId", v),
+      });
+      benchField.classList.remove("field-wide-input");
+      benchField.classList.add("field-stacked");
+      const row = el("div", "button-row");
+      const b = el("button", "secondary-button", "Load benchmark");
+      b.type = "button";
+      b.addEventListener("click", () => {
+        const id = state.getState().benchmarkId;
+        loadBenchmark(ctx, benches.some((bm) => bm.id === id) ? id : benches[0].id);
+      });
+      row.append(b);
+      content.append(benchField, row);
+    } else {
+      content.append(note("No built-in benchmarks for this robustness type yet."));
+    }
+  }
+
+  // 3. Your own model and points (or property).
   content.append(
     createFileInput({
       accept: ".onnx,.gz",
       label: "Model (.onnx)",
-      fileName: model?.fileName,
       onFile: async (file) => {
         try {
           await loadModelBytes(ctx, stripGz(file.name), await readFileBytes(file));
@@ -166,29 +208,16 @@ function renderModelSection(ctx) {
       },
     }),
   );
-
-  if (model?.loading) content.append(note("Loading the model and the libraries…"));
   if (model?.error) content.append(errorText(model.error));
-
   const ms = model?.summary;
-  if (ms) {
-    content.append(
-      note(
-        `${describeShape(ms.declaredInputShape)} → ${ms.outputSize} outputs · ${ms.paramCount.toLocaleString()} parameters`,
-      ),
-    );
-    if (ms.extraOutputs.length) {
-      content.append(note(`The model has several outputs; only "${ms.outputName}" is checked.`));
-    }
-    if (!ms.certifiable) content.append(note(`Certification is not available for this model (${ms.certifyNote}); only the attack will run.`));
-  }
+  if (ms?.extraOutputs.length) content.append(note(`The model has several outputs; only "${ms.outputName}" is checked.`));
+  if (ms && !ms.certifiable) content.append(note(`Certification is not available for this model (${ms.certifyNote}); only the attack will run.`));
 
   if (s.mode === "vnnlib") {
     content.append(
       createFileInput({
         accept: ".vnnlib,.gz,.txt,.smt2",
         label: "Property (.vnnlib)",
-        fileName: s.vnnlib?.fileName,
         onFile: async (file) => {
           loadSpecText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
           rerender();
@@ -197,78 +226,32 @@ function renderModelSection(ctx) {
     );
     if (s.vnnlib?.error) content.append(errorText(s.vnnlib.error));
     const v = s.vnnlib?.summary;
-    if (v) {
-      content.append(note(`${v.numInputs} inputs, ${v.numOutputs} outputs, ${v.regions} input region(s), ${v.disjuncts} unsafe case(s).`));
-      if (ms && (ms.inputSize !== v.numInputs || ms.outputSize !== v.numOutputs)) {
-        content.append(
-          errorText(`The property has ${v.numInputs} inputs and ${v.numOutputs} outputs; the model has ${ms.inputSize} and ${ms.outputSize}.`),
-        );
-      }
+    if (v && ms && (ms.inputSize !== v.numInputs || ms.outputSize !== v.numOutputs)) {
+      content.append(errorText(`The property has ${v.numInputs} inputs and ${v.numOutputs} outputs; the model has ${ms.inputSize} and ${ms.outputSize}.`));
     }
-  } else {
-    content.append(
-      createFileInput({
-        accept: ".csv,.txt,.gz",
-        label: "Points (.csv: inputs, then label)",
-        fileName: s.points?.fileName && `${s.points.fileName} (${s.points.rows} rows)`,
-        onFile: async (file) => {
-          loadPointsText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
-          rerender();
-        },
-      }),
-    );
+    return accordion(state, "setup", "Setup", content);
   }
 
-  const benchField = selectField({
-    name: "benchmark",
-    label: "Benchmark",
-    value: s.benchmarkId ?? BENCHMARKS[0].id,
-    options: BENCHMARKS.map((bm) => ({ value: bm.id, label: bm.label })),
-    onChange: (v) => state.set("benchmarkId", v),
-  });
-  benchField.classList.remove("field-wide-input");
-  benchField.classList.add("field-stacked");
-  const examples = el("div", "button-row");
-  const b = el("button", "secondary-button", "Load benchmark");
-  b.type = "button";
-  b.addEventListener("click", () => loadBenchmark(ctx, state.getState().benchmarkId ?? BENCHMARKS[0].id));
-  examples.append(b);
-  content.append(benchField, examples);
-  return accordion(state, "model", "1 · Model and points", content);
-}
-
-function renderPropertySection(ctx) {
-  const { state, rerender } = ctx;
-  const s = state.getState();
-  const content = el("div", "page-flow");
-
-  if (s.mode === "vnnlib") {
-    content.append(note("The property comes from the VNNLIB file (untested mode; switch back under Advanced)."));
-    return accordion(state, "property", "2 · Robustness", content);
-  }
-
-  const ps = s.pointsSettings;
-  const set = (key) => (v) => state.patch("pointsSettings", { [key]: v });
   content.append(
-    selectField({
-      name: "task",
-      label: "Robustness type",
-      value: ps.task,
-      options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
-      onChange: (v) => {
-        state.patch("pointsSettings", { task: v });
+    createFileInput({
+      accept: ".csv,.txt,.gz",
+      label: "Points (.csv: inputs, then label)",
+      onFile: async (file) => {
+        loadPointsText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
         rerender();
       },
     }),
-    numberField({ name: "epsilon", label: "ε (L∞, in the model's input units)", value: ps.epsilon, onChange: set("epsilon") }),
   );
+
+  // 4. Robustness settings.
+  content.append(numberField({ name: "epsilon", label: "ε (L∞, in the model's input units)", value: ps.epsilon, onChange: set("epsilon") }));
   if (ps.task === "regression-standard") {
     content.append(numberField({ name: "delta", label: "δ (allowed output change, L∞)", value: ps.delta, onChange: set("delta") }));
   }
   if (ps.task === "regression-lipschitz") {
     content.append(numberField({ name: "lipschitz", label: "L (allowed Lipschitz constant, L∞→L∞)", value: ps.lipschitz, onChange: set("lipschitz") }));
   }
-  return accordion(state, "property", "2 · Robustness", content);
+  return accordion(state, "setup", "Setup", content);
 }
 
 function renderAdvancedSection(ctx) {
@@ -410,10 +393,14 @@ function statusText(state) {
   if (run.status === "error") return `Error: ${run.error}`;
   if (run.status === "cancelled") return "Cancelled.";
   if (run.status === "done") return `Finished in ${formatTime(run.result.timeMs)}.`;
+  if (s.model?.loading) return `Loading ${s.model.fileName ?? "the model"}…`;
   if (!s.model?.summary) return "Load a model to start.";
   if (s.mode === "vnnlib" && !s.vnnlib?.summary) return "Load a VNNLIB property.";
   if (s.mode === "points" && !s.points?.text) return "Load a CSV of points.";
-  return "Ready.";
+  const ms = s.model.summary;
+  const modelText = `${s.model.fileName} (${ms.inputSize} → ${ms.outputSize})`;
+  const dataText = s.mode === "vnnlib" ? s.vnnlib.fileName : `${s.points.fileName} (${s.points.rows})`;
+  return `Ready: ${modelText}, ${dataText}`;
 }
 
 async function startRun(ctx) {
@@ -850,7 +837,7 @@ export function renderCheckPage(ctx) {
 
   const controls = el("div", "control-stack");
   const controlGroup = el("div", "accordion-group");
-  controlGroup.append(renderModelSection(ctx), renderPropertySection(ctx), renderAdvancedSection(ctx));
+  controlGroup.append(renderSetupSection(ctx), renderAdvancedSection(ctx));
   controls.append(controlGroup);
 
   const results = el("div", "results-stack");

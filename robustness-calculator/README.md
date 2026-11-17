@@ -123,14 +123,22 @@ tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
 
 ## Known limitations
 
+The tool is designed to be fast rather than complete. The Results tab ("Where
+the gaps come from") explains the two gaps in detail.
+
 - **Certification is incomplete.** There is no branch and bound or α-CROWN,
   so it certifies little at larger ε or on networks not trained for
-  verification. For example, it certifies 0/15 on the 6×256 network at
-  ε = 0.05.
+  verification. For example, on the 6×256 network at ε = 0.05 it certifies 0
+  of 12 published-robust images: roughly 750–1,300 of the 1,536 ReLUs are
+  unstable, and the margin bounds fall to between −300 and −16,000. No setting
+  changes this.
 - **Float32 is handled with a margin, not a proof.** Bounds are computed in
   float64 for the real-valued network; certification requires a margin bound
   above 10⁻³ to absorb float32 rounding, which is not a formal float32 proof.
-- **The attack misses some counterexamples:** 3 of 39 published ones,
-  including one hidden behind a rising margin (6×256, prop_1, ε = 0.05).
+- **The attack misses some counterexamples:** 5 of 150 published ones. The one
+  analysed (6×256, prop_1, ε = 0.05) sits beyond a region where the margin
+  first rises, so the gradient points away from it. More restarts or steps,
+  targeted attacks and random sampling do not find it; a gradient-free Square
+  Attack found it once but not reliably.
 - **Scope:** fully connected ReLU networks for certification; L∞ only; CPU
   JavaScript (a benchmark run takes seconds to about a minute).

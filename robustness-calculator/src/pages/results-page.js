@@ -95,6 +95,16 @@ export function renderResultsPage() {
   );
 
   card.append(
+    el("h2", "", "Where the gaps come from"),
+    para(
+      "The tool is built to be fast rather than complete, and its gaps have two sources. The clearest example is the 2022 mnist_fc 6×256 network at ε = 0.05, where the tool reports 0.0–93.3% against a published 80.0–86.7%.",
+    ),
+    list([
+      "Lower bound: certification (CROWN). None of the 12 published-robust images is certified. At this ε, roughly 750–1,300 of the network's 1,536 ReLUs are unstable (their input can take either sign inside the ε-ball). Each is replaced by a loose linear bound, and the looseness compounds over six layers, so the margin bounds come out between about −300 and −16,000 while the true margins are around +0.8. No setting changes this. Closing it would need optimised relaxations (α-CROWN) or branch and bound, which is how the published verifiers proved these images, at far more than a few seconds per image. The “ε range” option under Advanced still shows how far CROWN does reach, for example certified up to ε ≈ 0.021 and 0.030 for two of these images.",
+      "Upper bound: the attack (PGD). One published counterexample (image prop_1) is missed. Along the line from the image to the counterexample, the margin first rises and then drops sharply, so the gradient leads every start away from it. 1,000 restarts, 500 steps, either step schedule, per-class targeted attacks and 2,000 random points or box corners all failed to find it. A gradient-free Square Attack found it once, after about 56,000 queries, but not reliably, so it is not included. The attack misses 5 of the 150 published counterexamples in total; only this one was analysed.",
+      "Images that no published verifier decided (28) are not decided by the tool either.",
+    ]),
+
     el("h2", "", "Other checks"),
     list([
       "Small 2-input network with exact ground truth (branch and bound): the attack finds every non-robust point, the breaking ε is never below the exact value and at most 0.7% above it, and CROWN certifies 134 of 142 robust (point, ε) pairs and never a non-robust one.",

@@ -22,7 +22,7 @@ export function stripGz(name) {
   return name.replace(/\.gz$/i, "");
 }
 
-export function createFileInput({ accept, label, fileName, onFile }) {
+export function createFileInput({ accept, label, onFile }) {
   const row = document.createElement("div");
   row.className = "file-row";
 
@@ -40,11 +40,5 @@ export function createFileInput({ accept, label, fileName, onFile }) {
   heading.textContent = label;
 
   row.append(heading, input);
-  if (fileName) {
-    const current = document.createElement("span");
-    current.className = "section-note";
-    current.textContent = `Loaded: ${fileName}`;
-    row.append(current);
-  }
   return row;
 }
