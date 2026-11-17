@@ -11,7 +11,7 @@ import { makeBox, sampleBox32, boxContains } from "./box.js";
 import { deriveRng } from "./rng.js";
 import { runVnnlibCheck } from "./run-vnnlib.js";
 import { selfTest } from "../check/ort-check.js";
-import { crownLowerBounds, intervalLowerBounds, toleranceFor, chainForward, FLOAT_TOLERANCE } from "../bounds/crown.js";
+import { certifierLowerBounds, intervalLowerBounds, normaliseCertifier, toleranceFor, chainForward, FLOAT_TOLERANCE } from "../bounds/crown.js";
 import { regionViolated64, regionMargin64, formatCounterexample } from "../spec/vnnlib.js";
 
 /** Input splitting is used for regions with at most this many varying inputs. */
@@ -21,7 +21,7 @@ export const SPLIT_MAX_PIECES = 10000;
 import { disclaimerFor } from "./report.js";
 
 /** Smallest certified slack of a region (> 0 means proven safe) from CROWN. */
-function certifyRegion(chain, region, numOutputs, measuredError) {
+function certifyRegion(chain, region, numOutputs, measuredError, certifier) {
   const atoms = region.disjuncts.flatMap((d) => d.atoms);
   if (!atoms.length || region.disjuncts.some((d) => d.atoms.length === 0)) return { slack: -Infinity, safe: false };
   const C = new Float64Array(atoms.length * numOutputs);
@@ -30,7 +30,7 @@ function certifyRegion(chain, region, numOutputs, measuredError) {
   const ib = intervalLowerBounds(chain, region.lo, region.hi, C, atoms.length);
   const quick = evaluate(region, ib, measuredError);
   if (quick.safe) return quick;
-  const cb = crownLowerBounds(chain, region.lo, region.hi, C, atoms.length);
+  const cb = certifierLowerBounds(chain, region.lo, region.hi, C, atoms.length, { certifier });
   return evaluate(region, cb.map((v, i) => Math.max(v, ib[i])), measuredError); // both are sound
 }
 
@@ -58,7 +58,7 @@ function evaluate(region, lb, measuredError) {
  * every piece is proven safe, a piece's centre is a counterexample (re-checked
  * with onnxruntime), or SPLIT_MAX_PIECES pieces have been examined.
  */
-async function splitSearch(chain, checker, region, numOutputs, measuredError) {
+async function splitSearch(chain, checker, region, numOutputs, measuredError, certifier) {
   const varying = [];
   for (let i = 0; i < region.lo.length; i++) if (region.hi[i] > region.lo[i]) varying.push(i);
   const box = makeBox(region.lo, region.hi);
@@ -69,7 +69,7 @@ async function splitSearch(chain, checker, region, numOutputs, measuredError) {
     const [lo, hi] = stack.pop();
     pieces++;
     const sub = { ...region, lo, hi };
-    if (certifyRegion(chain, sub, numOutputs, measuredError).safe) continue;
+    if (certifyRegion(chain, sub, numOutputs, measuredError, certifier).safe) continue;
     const centre = Float32Array.from(lo, (v, i) => 0.5 * (v + hi[i]));
     if (boxContains(box, centre) && regionViolated64(region, chainForward(chain, centre))) {
       const y = await checker.evaluate(centre);
@@ -104,7 +104,9 @@ async function splitSearch(chain, checker, region, numOutputs, measuredError) {
  */
 export async function runPropertySet({ tf, model, checker, properties, settings, chain = null, chainError = null, onProgress = () => {} }) {
   const t0 = performance.now();
+  const certifier = normaliseCertifier(settings.certifier);
   const certify = settings.certify !== false && chain !== null;
+  const certificationMethod = certify ? certifier : settings.certify !== false ? "unavailable" : "off";
 
   for (const { name, spec } of properties) {
     if (spec.numInputs !== model.inputSize || spec.numOutputs !== model.outputSize) {
@@ -132,8 +134,8 @@ export async function runPropertySet({ tf, model, checker, properties, settings,
 
     let open = spec.regions;
     if (certify) {
-      onProgress({ phase: "certify", point: index, points: properties.length, unit: "property" });
-      const results = spec.regions.map((r) => certifyRegion(chain, r, spec.numOutputs, test?.maxAbsError ?? 0));
+      onProgress({ phase: "certify", point: index, points: properties.length, unit: "property", certifier });
+      const results = spec.regions.map((r) => certifyRegion(chain, r, spec.numOutputs, test?.maxAbsError ?? 0, certifier));
       row.certifiedSlack = Math.min(...results.map((r) => r.slack));
       open = spec.regions.filter((_, i) => !results[i].safe);
 
@@ -145,8 +147,8 @@ export async function runPropertySet({ tf, model, checker, properties, settings,
           stillOpen.push(region);
           continue;
         }
-        onProgress({ phase: "certify", point: index, points: properties.length, unit: "property" });
-        const r = await splitSearch(chain, checker, region, spec.numOutputs, test?.maxAbsError ?? 0);
+        onProgress({ phase: "certify", point: index, points: properties.length, unit: "property", certifier });
+        const r = await splitSearch(chain, checker, region, spec.numOutputs, test?.maxAbsError ?? 0, certifier);
         row.splitPieces = (row.splitPieces ?? 0) + r.pieces;
         if (r.status === "counterexample") {
           row.counterexample = r.counterexample;
@@ -193,7 +195,7 @@ export async function runPropertySet({ tf, model, checker, properties, settings,
     task: "properties",
     rows,
     summary: {
-      certification: certify ? "crown" : settings.certify !== false ? "unavailable" : "off",
+      certification: certificationMethod,
       certificationNote: chainError,
       certifiedCount: count("certified"),
       counterexampleCount: count("counterexample"),

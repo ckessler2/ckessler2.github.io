@@ -30,6 +30,7 @@ const state = createAppState({
     alpha: "",
     schedule: "apgd",
     certify: true,
+    certifier: "crown",
     backend: "webgl",
   },
   run: { status: "idle", result: null, error: null, progress: null },

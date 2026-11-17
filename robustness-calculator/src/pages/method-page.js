@@ -137,7 +137,7 @@ export function renderMethodPage({ renderMath }) {
 
     el("h2", "", "Not included"),
     list([
-      "Branch and bound over unstable ReLUs, which would make certification complete, and optimised relaxations (α-CROWN). Input splitting is only used for properties with at most 4 varying inputs.",
+      "Full α-CROWN optimisation and branch and bound over unstable ReLUs, which are needed for state-of-the-art complete verification. Input splitting here is only over low-dimensional inputs (at most 4 varying features for properties).",
       "Pooling, residual connections, grouped convolutions and activations other than ReLU (for certification).",
       "L2 perturbations.",
       "Gradient-free attacks (for example Square Attack). In our tests these found one counterexample that the gradient attack missed, but not reliably.",

@@ -59,7 +59,7 @@ function publishedTotals(task) {
   return totals;
 }
 
-/** Key figures, the tool-vs-published bars and the per-setting table for one task. */
+/** Key figures, tool-vs-published bars, and a per-benchmark-case table. */
 function benchmarkSection({ title, intro, rows, task, words, notes }) {
   const sum = (i) => rows.reduce((a, r) => a + r[i], 0);
   const n = sum(2);
@@ -86,12 +86,12 @@ function benchmarkSection({ title, intro, rows, task, words, notes }) {
     el("h2", "", title),
     para(intro(rows.length, n)),
     createStatGrid([
-      { label: "Tool's range contains the published result", value: `${rows.length} of ${rows.length} settings` },
-      { label: "Exact, or exactly the published range", value: `${exact} of ${rows.length} settings` },
+      { label: "Tool's range contains published answer", value: `${rows.length} of ${rows.length} benchmark cases (table rows)` },
+      { label: "Exact match (or exact published range)", value: `${exact} of ${rows.length} benchmark cases (table rows)` },
       {
         label: "Published answers recovered",
-        value: `${((tool.certified / published.certified) * 100).toFixed(1)}% ${words.safe} · ${((tool.counterexample / published.counterexample) * 100).toFixed(1)}% ${words.unsafe}`,
-        title: `${tool.certified} of ${published.certified} published-${words.safe} certified; ${tool.counterexample} of ${published.counterexample} published counterexamples found`,
+        value: `${((tool.certified / published.certified) * 100).toFixed(1)}% of published ${words.safe} cases · ${((tool.counterexample / published.counterexample) * 100).toFixed(1)}% of published ${words.unsafe} cases`,
+        title: `${tool.certified} of ${published.certified} published ${words.safe} cases certified; ${tool.counterexample} of ${published.counterexample} published ${words.unsafe} cases found`,
       },
     ]),
     createSplitBars({
@@ -104,7 +104,7 @@ function benchmarkSection({ title, intro, rows, task, words, notes }) {
         { label: "This tool", values: tool },
         { label: "Published verifiers", values: published },
       ],
-      caption: `The same ${words.units.toLowerCase()}, decided by this tool and by the competitions' complete verifiers (published: proven ${words.safe}, counterexample, or undecided). The tool leaves more unknown, but everything it decides agrees with the published verdict.`,
+      caption: `Comparison on the same ${words.units.toLowerCase()}: this tool versus the published competition verifiers. "Unknown" means undecided. This tool leaves more unknown cases, but the cases it decides agree with the published verdicts.`,
     }),
     wrap,
     list(notes),
@@ -117,26 +117,27 @@ export function renderResultsPage() {
   card.append(
     ...benchmarkSection({
       title: "Classification benchmarks",
-      intro: (k, n) => `ε-ball classification on ${k} published VNN-COMP settings (${n} images), at the default settings, against the verdicts of the competitions' complete verifiers.`,
+      intro: (k, n) => `ε-ball classification on ${k} published VNN-COMP benchmark cases (${n} images), using the default options. Here, each benchmark case is one table row (a benchmark + its ε/variant). Results are compared with published competition verdicts.`,
       rows: CLASSIFICATION,
       task: "classification",
       words: { setting: "ε", units: "Images", safe: "robust", unsafe: "not robust" },
       notes: [
-        "Useful: in 10 of the 18 settings the tool gives the exact answer or exactly the published range, in seconds to a minute. This includes the linear MalBeWare classifier (CROWN is exact for a linear model), the set-trained CORA MNIST network, and the CORA SVHN networks, where every image has a counterexample. Overall it certifies 99 of the 142 published-robust images and finds counterexamples for 145 of the 150 published-non-robust ones.",
-        "Limited: at ε = 0.05 on the standard-trained 2022 networks, CROWN certifies almost nothing, so the range is wide (for example 0.0–93.3%). The attack misses 5 published counterexamples (for example 2 on CORA CIFAR-10 trades, whose range therefore reaches 30% against at most 20% published). None of the 28 images that no verifier decided is decided by the tool either.",
-        "The page runs the attack with WebGL by default, which can find slightly different counterexamples than the CPU run behind this table; certification is unaffected.",
+        "Quick takeaway: the tool is exact (or exactly matches the published range) in 10 of 18 benchmark cases, often in seconds to about a minute.",
+        "Where it struggles: at larger ε (especially 2022 mnist_fc at ε = 0.05), certification proves very few images, so the reported range stays wide.",
+        "Attack limits: it misses 5 of 150 published non-robust images, so the upper bound can be too high in a few cases (for example CORA CIFAR-10 trades).",
+        "Reproducibility note: these tables were produced on CPU. The page defaults to WebGL, which may find slightly different counterexamples, but certification is unchanged.",
       ],
     }),
     ...benchmarkSection({
       title: "Regression benchmarks",
-      intro: (k, n) => `Published regression properties (an input box and an unsafe condition on the outputs) in ${k} settings (${n} properties), at the default settings, against the verdicts of the competitions' complete verifiers.`,
+      intro: (k, n) => `Published regression properties in ${k} benchmark cases (${n} properties), using the default options. Here, each benchmark case is one table row (a benchmark + its variant). Results are compared with published competition verdicts.`,
       rows: REGRESSION,
       task: "properties",
-      words: { setting: "Setting", units: "Properties", safe: "safe", unsafe: "unsafe" },
+      words: { setting: "Case", units: "Properties", safe: "safe", unsafe: "unsafe" },
       notes: [
-        "Useful: in 13 of the 17 settings the tool gives the exact answer. The convolutional Collins RUL networks are decided completely in 10 of their 12 settings, in seconds to a minute; every learned-index property is certified; and the Van der Pol setting is decided completely, with input splitting certifying all 9 safe properties (the inputs are only three-dimensional) and the attack finding all 3 counterexamples.",
-        "Limited: the reach_prob_density properties have large input boxes. For ground-collision avoidance (14 inputs) and the robot (5 inputs), CROWN certifies nothing and there are too many inputs for splitting, although the attack finds all 4 and 4 of the 7 published counterexamples (the robot's other 3 were not analysed). On the larger Collins network (window 40) with 8–16 perturbed readings, the wide convolution layers use interval bounds and several properties stay unknown.",
-        "The six largest learned-index properties (3,000–60,000 key ranges each) are left out as too large for a quick in-browser check.",
+        "Quick takeaway: the tool gives an exact match in 13 of 17 benchmark cases. Many Collins cases and all included nn4sys cases are fully decided.",
+        "Where it struggles: some larger-input cases (especially reach_prob_density and larger Collins window-40 cases) remain unknown.",
+        "Scope note: the six largest nn4sys properties are omitted because they are too large for a fast in-browser check.",
       ],
     }),
   );
@@ -144,19 +145,19 @@ export function renderResultsPage() {
   card.append(
     el("h2", "", "Where the gaps come from"),
     para(
-      "The tool is built to be fast rather than complete, and its gaps have two sources. The clearest example is the 2022 mnist_fc 6×256 network at ε = 0.05, where the tool reports 0.0–93.3% against a published 80.0–86.7%.",
+      "The tool is designed for fast checks in the browser, so some results stay uncertain. The biggest gaps come from two places:",
     ),
     list([
-      "Lower bound: certification (CROWN). None of the 12 published-robust images is certified. At this ε, roughly 750–1,300 of the network's 1,536 ReLUs are unstable (their input can take either sign inside the ε-ball). Each is replaced by a loose linear bound, and the looseness compounds over six layers, so the margin bounds come out between about −300 and −16,000 while the true margins are around +0.8. No setting changes this. Closing it would need optimised relaxations (α-CROWN) or branch and bound, which is how the published verifiers proved these images, at far more than a few seconds per image. The “ε range” option under Advanced still shows how far CROWN does reach, for example certified up to ε ≈ 0.021 and 0.030 for two of these images.",
-      "Upper bound: the attack (PGD). One published counterexample (image prop_1) is missed. Along the line from the image to the counterexample, the margin first rises and then drops sharply, so the gradient leads every start away from it. 1,000 restarts, 500 steps, either step schedule, per-class targeted attacks and 2,000 random points or box corners all failed to find it. A gradient-free Square Attack found it once, after about 56,000 queries, but not reliably, so it is not included. The attack misses 5 of the 150 published counterexamples in total; only this one was analysed.",
-      "Images that no published verifier decided (28) are not decided by the tool either.",
+      "Certification gap (lower bound): on harder cases, especially 2022 mnist_fc 6×256 at ε = 0.05, certification proves very few robust images, so the lower bound can be much lower than the published value.",
+      "Attack gap (upper bound): the attack can miss some counterexamples. Overall it misses 5 of 150 published non-robust classification images, which can leave the upper bound too high in a few cases.",
+      "Undecided cases: if the published complete verifiers were undecided, this tool is usually undecided too (28 classification images).",
     ]),
 
     el("h2", "", "Other checks"),
     list([
-      "Small 2-input network with exact ground truth (branch and bound): the attack finds every non-robust point, the breaking ε is never below the exact value and at most 0.7% above it, and CROWN certifies 134 of 142 robust (point, ε) pairs and never a non-robust one.",
-      "Translation: it agrees with onnxruntime-web to within 2·10⁻⁵ relative on all 45 ACAS Xu networks, and the merged layer chain matches onnxruntime on the benchmark networks and on ACAS Xu.",
-      "All checks can be rerun with the scripts in tests/benchmarks/ (crown.js for both tables above) and npm test.",
+      "Toy-network check (with exact ground truth): the attack finds all non-robust points, and certification never falsely proves a non-robust case.",
+      "Model-translation check: the ONNX-to-tf.js translation is cross-checked against onnxruntime-web on ACAS Xu and benchmark networks.",
+      "You can rerun these checks with `node tests/benchmarks/crown.js` and `npm test`.",
     ]),
   );
 

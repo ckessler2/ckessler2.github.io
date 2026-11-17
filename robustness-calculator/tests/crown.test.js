@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReluChain, crownMarginLowerBound, chainForward } from "../src/bounds/crown.js";
+import { buildReluChain, crownMarginLowerBound, certifierMarginLowerBound, chainForward } from "../src/bounds/crown.js";
 import { parseOnnxModel } from "../src/onnx/onnx-model.js";
 import { readMlp, exactRobust, margin } from "./helpers/exact-bab.js";
 import { buildToyClassifier } from "./helpers/toy-classifier.js";
@@ -39,6 +39,25 @@ test("CROWN bounds are sound and never certify a non-robust point (toy classifie
   }
   console.log(`  CROWN certified ${certified} of ${robust} truly robust (point, ε) pairs.`);
   assert.ok(certified > 0);
+});
+
+test("α-CROWN-lite keeps soundness and is never weaker than CROWN (toy classifier)", () => {
+  const rng = createRng(31);
+  for (const eps of [0.02, 0.05, 0.1, 0.2]) {
+    points.inputs.forEach((x, i) => {
+      const label = points.labels[i];
+      const lo = x.map((v) => v - eps);
+      const hi = x.map((v) => v + eps);
+      const crown = crownMarginLowerBound(layers, lo, hi, label);
+      const lite = certifierMarginLowerBound(layers, lo, hi, label, { certifier: "acrown-lite" });
+      assert.ok(lite >= crown - 1e-9, `point ${i}, eps ${eps}: α-CROWN-lite ${lite} < CROWN ${crown}`);
+      for (let s = 0; s < 200; s++) {
+        const p = lo.map((l, k) => l + rng() * (hi[k] - l));
+        assert.ok(lite <= margin(mlp, p, label) + 1e-9, `point ${i}, eps ${eps}: α-CROWN-lite ${lite} above sampled margin`);
+      }
+      assert.ok(lite <= margin(mlp, x, label) + 1e-9);
+    });
+  }
 });
 
 test("chain extraction folds normalisation and reshapes, and matches onnxruntime", async () => {

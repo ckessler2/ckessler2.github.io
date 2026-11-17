@@ -23,6 +23,10 @@
 const MAX_MATRIX = 50_000_000;
 const CROWN_MAX_WIDTH = 1024;
 
+export const CERTIFIERS = ["crown", "acrown-lite"];
+const ACROWN_LITE_MODES = ["adaptive", "upper", "mid", "one", "zero"];
+const ACROWN_LITE_ROW_LIMIT = 64;
+
 /**
  * Bounds are computed for the real-valued network. The deployed network runs
  * in float32, whose rounding can move the outputs slightly, so a bound only
@@ -428,7 +432,28 @@ export function chainForward(chain, x) {
  * row-major), where z_k is the pre-activation of layer k, given the
  * pre-activation bounds of the earlier layers.
  */
-function backward(layers, k, A, m, lo, hi, bounds) {
+function reluLowerSlope(mode, li, ui) {
+  switch (mode) {
+    case "zero":
+      return 0;
+    case "one":
+      return 1;
+    case "mid":
+      return 0.5;
+    case "upper":
+      return ui / (ui - li);
+    case "adaptive":
+    default:
+      return ui >= -li ? 1 : 0;
+  }
+}
+
+/** "acrown-lite" maps to a small set of sound slope choices; unknown values fall back to CROWN. */
+export function normaliseCertifier(name) {
+  return CERTIFIERS.includes(name) ? name : "crown";
+}
+
+function backward(layers, k, A, m, lo, hi, bounds, { alphaMode = "adaptive" } = {}) {
   let lam = A;
   const c = new Float64Array(m);
   for (let j = k; j >= 0; j--) {
@@ -446,7 +471,7 @@ function backward(layers, k, A, m, lo, hi, bounds) {
         const v = lam[idx];
         if (v === 0) continue;
         if (ui <= 0) lam[idx] = 0;
-        else if (v >= 0) lam[idx] = ui >= -li ? v : 0;
+        else if (v >= 0) lam[idx] = v * reluLowerSlope(alphaMode, li, ui);
         else {
           const s = ui / (ui - li);
           lam[idx] = v * s;
@@ -466,6 +491,33 @@ function backward(layers, k, A, m, lo, hi, bounds) {
     out[r] = s;
   }
   return out;
+}
+
+function buildHiddenBounds(chain, lo, hi) {
+  const { layers } = chain;
+  const bounds = [];
+  for (let k = 0; k < layers.length - 1; k++) {
+    const n = layers[k].nout;
+    if (k === 0 || n > CROWN_MAX_WIDTH) {
+      // Interval arithmetic: exact for the first layer when it is one affine op.
+      const prevL = k === 0 ? lo : bounds[k - 1].l.map((v) => Math.max(0, v));
+      const prevU = k === 0 ? hi : bounds[k - 1].u.map((v) => Math.max(0, v));
+      bounds.push(intervalLayer(layers[k], prevL, prevU));
+      continue;
+    }
+    const A = new Float64Array(2 * n * n);
+    for (let i = 0; i < n; i++) {
+      A[i * n + i] = 1;
+      A[(n + i) * n + i] = -1;
+    }
+    const lb = backward(layers, k, A, 2 * n, lo, hi, bounds);
+    // Keep the tighter of CROWN and interval bounds.
+    const ib = intervalLayer(layers[k], bounds[k - 1].l.map((v) => Math.max(0, v)), bounds[k - 1].u.map((v) => Math.max(0, v)));
+    const l = lb.slice(0, n).map((v, i) => Math.max(v, ib.l[i]));
+    const u = lb.slice(n).map((v, i) => Math.min(-v, ib.u[i]));
+    bounds.push({ l, u });
+  }
+  return bounds;
 }
 
 function intervalLayer(layer, lo, hi) {
@@ -502,33 +554,48 @@ export function intervalLowerBounds(chain, lo, hi, C, m) {
 /** Lower bounds of C·y (C: m × outputs) over the box [lo, hi]. */
 export function crownLowerBounds(chain, lo, hi, C, m) {
   const { layers } = chain;
-  const bounds = [];
-  for (let k = 0; k < layers.length - 1; k++) {
-    const n = layers[k].nout;
-    if (k === 0 || n > CROWN_MAX_WIDTH) {
-      // Interval arithmetic: exact for the first layer when it is one affine op.
-      const prevL = k === 0 ? lo : bounds[k - 1].l.map((v) => Math.max(0, v));
-      const prevU = k === 0 ? hi : bounds[k - 1].u.map((v) => Math.max(0, v));
-      bounds.push(intervalLayer(layers[k], prevL, prevU));
-      continue;
-    }
-    const A = new Float64Array(2 * n * n);
-    for (let i = 0; i < n; i++) {
-      A[i * n + i] = 1;
-      A[(n + i) * n + i] = -1;
-    }
-    const lb = backward(layers, k, A, 2 * n, lo, hi, bounds);
-    // Keep the tighter of CROWN and interval bounds.
-    const ib = intervalLayer(layers[k], bounds[k - 1].l.map((v) => Math.max(0, v)), bounds[k - 1].u.map((v) => Math.max(0, v)));
-    const l = lb.slice(0, n).map((v, i) => Math.max(v, ib.l[i]));
-    const u = lb.slice(n).map((v, i) => Math.min(-v, ib.u[i]));
-    bounds.push({ l, u });
-  }
+  const bounds = buildHiddenBounds(chain, lo, hi);
   return backward(layers, layers.length - 1, C, m, lo, hi, bounds);
+}
+
+/**
+ * α-CROWN-lite: per-output lower bound from a small set of sound ReLU lower
+ * slopes (shared per row). It is incomplete, but often tighter than one fixed
+ * CROWN choice while keeping browser-friendly runtime and memory.
+ */
+export function acrownLiteLowerBounds(chain, lo, hi, C, m, { rowLimit = ACROWN_LITE_ROW_LIMIT, modes = ACROWN_LITE_MODES } = {}) {
+  if (m > rowLimit) return crownLowerBounds(chain, lo, hi, C, m);
+  const { layers } = chain;
+  const bounds = buildHiddenBounds(chain, lo, hi);
+  const nOut = layers[layers.length - 1].nout;
+  const out = new Float64Array(m);
+  const row = new Float64Array(nOut);
+  for (let r = 0; r < m; r++) {
+    for (let j = 0; j < nOut; j++) row[j] = C[r * nOut + j];
+    let best = -Infinity;
+    for (const mode of modes) {
+      const lb = backward(layers, layers.length - 1, row, 1, lo, hi, bounds, { alphaMode: mode })[0];
+      if (lb > best) best = lb;
+    }
+    out[r] = best;
+  }
+  return out;
+}
+
+/** Lower bounds from the selected certifier (default: CROWN). */
+export function certifierLowerBounds(chain, lo, hi, C, m, { certifier = "crown" } = {}) {
+  const method = normaliseCertifier(certifier);
+  if (method === "acrown-lite") return acrownLiteLowerBounds(chain, lo, hi, C, m);
+  return crownLowerBounds(chain, lo, hi, C, m);
 }
 
 /** Lower bound on min over j ≠ label of (y_label − y_j) over the box. */
 export function crownMarginLowerBound(chain, lo, hi, label) {
+  return certifierMarginLowerBound(chain, lo, hi, label, { certifier: "crown" });
+}
+
+/** Lower bound on min over j ≠ label of (y_label − y_j), for a chosen certifier. */
+export function certifierMarginLowerBound(chain, lo, hi, label, { certifier = "crown" } = {}) {
   const nOut = chain.layers[chain.layers.length - 1].nout;
   const C = new Float64Array((nOut - 1) * nOut);
   let r = 0;
@@ -538,5 +605,5 @@ export function crownMarginLowerBound(chain, lo, hi, label) {
     C[r * nOut + j] = -1;
     r++;
   }
-  return Math.min(...crownLowerBounds(chain, lo, hi, C, nOut - 1));
+  return Math.min(...certifierLowerBounds(chain, lo, hi, C, nOut - 1, { certifier }));
 }
