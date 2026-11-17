@@ -1,6 +1,7 @@
 import { createAppState } from "./state.js";
 import { createRouter } from "./router.js";
 import { createWorkerClient } from "./worker-client.js";
+import { ATTACK_DEFAULTS } from "../attack/defaults.js";
 
 const appRoot = document.getElementById("app");
 
@@ -25,13 +26,11 @@ const state = createAppState({
   },
   attack: {
     seed: 0,
-    restarts: 400,
-    steps: 200,
+    ...ATTACK_DEFAULTS.points,
     alpha: "",
     schedule: "apgd",
     certify: true,
     backend: "webgl",
-    selfTestSamples: 100,
   },
   run: { status: "idle", result: null, error: null, progress: null },
 });

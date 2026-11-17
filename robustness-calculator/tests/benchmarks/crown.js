@@ -21,6 +21,7 @@ import { buildReluChain } from "../../src/bounds/crown.js";
 import { BENCHMARKS, pointFromProperty } from "../../src/spec/benchmark.js";
 import { runPointsCheck } from "../../src/attack/run-points.js";
 import { runPropertySet } from "../../src/attack/run-properties.js";
+import { ATTACK_DEFAULTS } from "../../src/attack/defaults.js";
 import { parseVnnlib } from "../../src/spec/vnnlib.js";
 
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
@@ -79,7 +80,7 @@ for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tas
       checker,
       chain: chainResult,
       properties: texts.map((t, i) => ({ name: b.imageNames[i], spec: parseVnnlib(t) })),
-      settings: { seed: 0, restarts: 400, steps: 200, schedule: "apgd", selfTestSamples: 100 },
+      settings: { seed: 0, ...ATTACK_DEFAULTS.properties, schedule: "apgd" },
     });
     const line = tally(totals, b, "", r.rows, verdicts);
     const n = r.rows.length;
@@ -110,10 +111,8 @@ for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tas
         task: "classification",
         epsilon: Number(epsText),
         seed: 0,
-        restarts: 400,
-        steps: 200,
+        ...ATTACK_DEFAULTS.points,
         schedule: "apgd",
-        selfTestSamples: 100,
         domainLo: new Array(model.inputSize).fill(0),
         domainHi: new Array(model.inputSize).fill(1),
       },

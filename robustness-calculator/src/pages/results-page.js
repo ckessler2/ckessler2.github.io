@@ -3,8 +3,9 @@ import { createStatGrid } from "../components/stats.js";
 import { createSplitBars } from "../components/split-bars.js";
 import { BENCHMARKS } from "../spec/benchmark.js";
 
-// Results of tests/benchmarks/crown.js at the default settings
-// (R = 10, K = 50, APGD, seed 0, CPU backend). Each row:
+// Results of tests/benchmarks/crown.js at the default settings (APGD,
+// seed 0, CPU backend; R = 10, K = 50 for classification and R = 400,
+// K = 200 for regression properties). Each row:
 // [benchmark, setting, instances, certified, counterexamples, unknown, tool's range, published].
 const CLASSIFICATION = [
     ["2022 mnist_fc, 6×256", "0.03", 15, 9, 1, 5, "60.0–93.3%", "93.3%"],
@@ -43,8 +44,8 @@ const REGRESSION = [
     ["2025 nn4sys learned index", "4 layers", 6, 6, 0, 0, "100.0%", "100.0%"],
     ["2025 nn4sys learned index", "deep", 6, 6, 0, 0, "100.0%", "100.0%"],
     ["2022 reach_prob_density", "ground-collision avoidance", 12, 0, 4, 8, "0.0–66.7%", "66.7%"],
-    ["2022 reach_prob_density", "robot", 12, 0, 3, 9, "0.0–75.0%", "41.7%"],
-    ["2022 reach_prob_density", "Van der Pol", 12, 9, 1, 2, "75.0–91.7%", "75.0%"],
+    ["2022 reach_prob_density", "robot", 12, 0, 4, 8, "0.0–66.7%", "41.7%"],
+    ["2022 reach_prob_density", "Van der Pol", 12, 9, 3, 0, "75.0%", "75.0%"],
 ];
 
 /** Published verdict counts for one task, from src/spec/benchmark.js. */
@@ -85,12 +86,12 @@ function benchmarkSection({ title, intro, rows, task, words, notes }) {
     el("h2", "", title),
     para(intro(rows.length, n)),
     createStatGrid([
-      { label: "Contradictions with published verdicts", value: `0 of ${n} ${words.units.toLowerCase()}` },
       { label: "Tool's range contains the published result", value: `${rows.length} of ${rows.length} settings` },
       { label: "Exact, or exactly the published range", value: `${exact} of ${rows.length} settings` },
       {
         label: "Published answers recovered",
-        value: `${tool.certified}/${published.certified} ${words.safe} · ${tool.counterexample}/${published.counterexample} ${words.unsafe}`,
+        value: `${((tool.certified / published.certified) * 100).toFixed(1)}% ${words.safe} · ${((tool.counterexample / published.counterexample) * 100).toFixed(1)}% ${words.unsafe}`,
+        title: `${tool.certified} of ${published.certified} published-${words.safe} certified; ${tool.counterexample} of ${published.counterexample} published counterexamples found`,
       },
     ]),
     createSplitBars({
@@ -133,8 +134,8 @@ export function renderResultsPage() {
       task: "properties",
       words: { setting: "Setting", units: "Properties", safe: "safe", unsafe: "unsafe" },
       notes: [
-        "Useful: in 12 of the 17 settings the tool gives the exact answer. The convolutional Collins RUL networks are decided completely in 10 of their 12 settings, in seconds to a minute; every learned-index property is certified; and input splitting certifies 9 of the 12 Van der Pol properties, whose inputs are only three-dimensional.",
-        "Limited: the reach_prob_density properties have large input boxes. For ground-collision avoidance (14 inputs) and the robot (5 inputs), CROWN certifies nothing and there are too many inputs for splitting, although the attack finds all 4 and 3 of the 7 published counterexamples. Two Van der Pol counterexamples sit in very thin unsafe regions and are missed. On the larger Collins network (window 40) with 8–16 perturbed readings, the wide convolution layers use interval bounds and several properties stay unknown.",
+        "Useful: in 13 of the 17 settings the tool gives the exact answer. The convolutional Collins RUL networks are decided completely in 10 of their 12 settings, in seconds to a minute; every learned-index property is certified; and the Van der Pol setting is decided completely, with input splitting certifying all 9 safe properties (the inputs are only three-dimensional) and the attack finding all 3 counterexamples.",
+        "Limited: the reach_prob_density properties have large input boxes. For ground-collision avoidance (14 inputs) and the robot (5 inputs), CROWN certifies nothing and there are too many inputs for splitting, although the attack finds all 4 and 4 of the 7 published counterexamples (the robot's other 3 were not analysed). On the larger Collins network (window 40) with 8–16 perturbed readings, the wide convolution layers use interval bounds and several properties stay unknown.",
         "The six largest learned-index properties (3,000–60,000 key ranges each) are left out as too large for a quick in-browser check.",
       ],
     }),

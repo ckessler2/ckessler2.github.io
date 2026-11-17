@@ -9,6 +9,7 @@ import { parseVnnlib } from "../spec/vnnlib.js";
 import { TASKS } from "../spec/points.js";
 import { BENCHMARKS, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
 import { disclaimerFor } from "../attack/report.js";
+import { attackDefaultsFor } from "../attack/defaults.js";
 import { TFJS_VERSION, ORT_VERSION } from "../lib/cdn.js";
 
 
@@ -137,6 +138,7 @@ async function loadBenchmark(ctx, id) {
     loadPointsText(ctx, "benchmark images", csv);
     state.patch("points", { reference: bench.reference, imageNames: bench.imageNames });
     state.patch("pointsSettings", { task: "classification", searchEpsilon: false, ...bench.settings });
+    state.patch("attack", attackDefaultsFor("classification"));
     await loadModelBytes(ctx, bench.modelName, modelBytes);
   } catch (err) {
     state.set("model", { error: `Could not load the benchmark: ${err.message}` });
@@ -148,6 +150,7 @@ async function loadPropertyBenchmark(ctx, bench) {
   const { state, rerender } = ctx;
   state.set("mode", "vnnlib");
   state.patch("pointsSettings", { task: "properties" });
+  state.patch("attack", attackDefaultsFor("properties"));
   state.set("run", { status: "idle" });
   state.set("model", { fileName: bench.modelName, loading: true });
   rerender();
@@ -187,6 +190,7 @@ function renderSetupSection(ctx) {
         options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
         onChange: (v) => {
           state.patch("pointsSettings", { task: v });
+          state.patch("attack", attackDefaultsFor(v));
           state.set("mode", v === "properties" ? "vnnlib" : "points");
           rerender();
         },

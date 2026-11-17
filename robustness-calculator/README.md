@@ -1,6 +1,6 @@
-# ε-Ball Robustness Estimator
+# rapidNNV
 
-*Certified and attack bounds for neural networks, in your browser.*
+*Quick neural network verification estimates, in your browser, with no setup.*
 
 A static, client-side tool that checks the robustness of ONNX networks: ε-ball
 robustness of classifiers, and published-style regression properties (an
@@ -10,7 +10,7 @@ it either **certifies** it with CROWN (a bound propagation method), finds a
 or reports **unknown**. Results are reported as a range: certified share ≤
 exact value ≤ share without a counterexample. On every published VNN-COMP
 benchmark tried (35 settings), the range contains the published result, and
-in 22 it matches exactly. Nothing is
+in 23 it matches exactly. Nothing is
 uploaded and nothing needs installing. The
 original plan is in `robustness_checker_brief.md`; the page's **Method** tab
 documents the method in full.
@@ -36,8 +36,8 @@ inputs, ε is normalised too.
 - the certification switch;
 - the per-point ε range (certified up to / broken from);
 - input clipping (for example [0, 1] for images);
-- seed, restarts R (default 400), steps K (default 200), self-test samples
-  (default 100), step schedule and
+- seed, restarts R, steps K and self-test samples (defaults: 10 / 50 / 20 for
+  points, 400 / 200 / 100 for regression properties), step schedule and
   tf.js backend (WebGL by default; CPU for bit-for-bit reproducible attacks);
 - (input splitting for regression properties with at most 4 varying inputs is
   automatic).
@@ -87,7 +87,7 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 |---|---|
 | Unit tests (`npm test`) | 31/31 pass |
 | Classification benchmarks, default settings: 320 images in 18 settings (`node tests/benchmarks/crown.js --tasks=classification`) | 0 contradictions with published verdicts. Certified 99/142 published-robust images; counterexamples for 145/150 published-non-robust images. The range contains the published robust accuracy in all 18 settings and equals it (or the published range) in 10. |
-| Regression benchmarks, default settings: 96 properties in 17 settings (`node tests/benchmarks/crown.js --tasks=properties`) | 0 contradictions. Certified 45/64 published-safe properties; counterexamples for 26/32 published-unsafe ones. The range contains the published value in all 17 settings and equals it in 12. |
+| Regression benchmarks, default settings: 96 properties in 17 settings (`node tests/benchmarks/crown.js --tasks=properties`) | 0 contradictions. Certified 45/64 published-safe properties; counterexamples for 29/32 published-unsafe ones. The range contains the published value in all 17 settings and equals it in 13. |
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
 | Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks and 6·10⁻⁶ on the Collins CNNs. The CROWN layer chain matches onnxruntime on the benchmark networks (including convolutions) and ACAS Xu. |
 
@@ -156,8 +156,8 @@ the gaps come from") explains the two gaps in detail.
   larger of 10⁻⁵ × max(1, |threshold|) and 10× the float32 disagreement the
   run's self-test measures. This is not a formal float32 proof.
 - **The attack misses some counterexamples:** 5 of 150 published ones in
-  classification and 6 of 32 in regression (several in very thin unsafe
-  regions). The classification one
+  classification and 3 of 32 in regression (all on the robot benchmark; not
+  analysed). The classification one
   analysed (6×256, prop_1, ε = 0.05) sits beyond a region where the margin
   first rises, so the gradient points away from it. More restarts or steps,
   targeted attacks and random sampling do not find it; a gradient-free Square

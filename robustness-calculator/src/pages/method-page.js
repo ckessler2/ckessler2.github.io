@@ -12,9 +12,7 @@ export function renderMethodPage({ renderMath }) {
   card.append(
     el("h2", "", "What this tool does"),
     para(
-      "You give it a classifier in ONNX format, a set of points (for example test images with their labels) and a radius ε. For every point it asks whether some input within L∞ distance ε (the ",
-      el("em", "", "ε-ball"),
-      ") is classified differently, and answers in one of three ways:",
+      "You give it an ONNX network and a specification. For point-based checks this is a CSV of inputs (plus labels for classification) with a radius ε; for property checks it is one or more VNNLIB files (input boxes with unsafe output conditions). For each point or property, the tool answers in one of three ways:",
     ),
     list([
       [el("strong", "", "certified"), ": proven robust. CROWN, a bound-propagation method, shows that no input in the ε-ball can change the class."],
@@ -30,7 +28,7 @@ export function renderMethodPage({ renderMath }) {
       "Neither method is complete. Certification is sound but can fail to prove robust points robust; the attack can miss counterexamples. An unknown point may be either. Only a complete verifier (for example α,β-CROWN or Marabou) is guaranteed to decide every point.",
     ),
     para(
-      "For regression, the tool checks published-style properties instead: an input box (for example a few perturbed sensor readings) and an unsafe condition on the outputs (for example, the prediction leaves a given interval). Each property is likewise certified safe, shown unsafe by a counterexample, or left unknown.",
+      "Regression has two point-based attack-only checks (standard δ and Lipschitz), and one property mode: an input box (for example a few perturbed sensor readings) with an unsafe condition on the outputs (for example, the prediction leaves a given interval). In the property mode, each property is likewise certified safe, shown unsafe by a counterexample, or left unknown.",
     ),
     para("Everything runs in your browser. Nothing is uploaded; the built-in benchmarks are downloaded from GitHub."),
     para("How well this works on published benchmarks is shown on the ", link("#/results", "Results"), " tab."),
@@ -74,7 +72,7 @@ export function renderMethodPage({ renderMath }) {
         link("https://arxiv.org/abs/1706.06083", "Madry et al., 2018"),
         ") is available under Advanced.",
       ],
-      "There are R uniformly random starts (default 400), each run for K steps (default 200), all batched into one tensor. The box centre and the box corner indicated by the gradient at the centre are always tried as well.",
+      "There are R uniformly random starts, each run for K steps, all batched into one tensor. The defaults depend on the robustness type: R = 10 and K = 50 for points (classification and the standard and Lipschitz regression checks), where every uncertified point is a high-dimensional ε-ball; R = 400 and K = 200 for regression properties, whose boxes in the built-in benchmarks are low-dimensional and cheap to attack. The box centre and the box corner indicated by the gradient at the centre are always tried as well.",
       "The attack stops as soon as a counterexample is confirmed. A point that is already misclassified without perturbation counts as a counterexample.",
       "Randomness comes from a seeded generator (mulberry32). Gradients are computed with tf.js on the GPU (WebGL) by default, falling back to the CPU if WebGL is unavailable. On the CPU backend, the same seed and settings give bit-for-bit identical results; on WebGL, results can differ slightly between devices. This affects only which counterexamples the attack finds, not their validity (each is re-checked with onnxruntime) and not certification (CROWN runs in float64 JavaScript).",
       "Gradients come from a TensorFlow.js translation of the ONNX model. The attack runs in a Web Worker, so the page stays responsive, and Cancel stops it immediately.",
@@ -87,7 +85,7 @@ export function renderMethodPage({ renderMath }) {
     list([
       "Every counterexample is clamped to the box and re-evaluated with onnxruntime-web, which runs the original ONNX file independently of the translation. The class change is then confirmed in float64. Candidates that fail are discarded and counted as spurious.",
       "Box bounds are rounded inwards to float32, so a counterexample lies inside the box exactly as specified, not just after rounding. An input fixed to a single value that float32 cannot represent is set to the nearest float32, since a float32 network cannot be given the exact value.",
-      "Before each run, a self-test compares the translation with onnxruntime-web on random inputs from the boxes (100 by default). A warning appears if they differ by more than 10⁻⁴, relative to the size of the output vector.",
+      "Before each run, a self-test compares the translation with onnxruntime-web on random inputs from the boxes (20 by default for points, 100 for properties). A warning appears if they differ by more than 10⁻⁴, relative to the size of the output vector.",
     ]),
 
     el("h2", "", "Optional: ε range per point"),

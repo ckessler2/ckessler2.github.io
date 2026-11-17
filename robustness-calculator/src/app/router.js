@@ -73,7 +73,7 @@ export function createRouter(root, state, worker) {
 
     const title = document.createElement("h1");
     title.className = "site-title";
-    title.textContent = "ε-Ball Robustness Estimator";
+    title.textContent = "rapidNNV";
 
     const byline = document.createElement("p");
     byline.className = "site-byline";
@@ -87,7 +87,7 @@ export function createRouter(root, state, worker) {
 
     const subtitle = document.createElement("p");
     subtitle.className = "site-subtitle";
-    subtitle.textContent = "Certified and attack bounds for neural networks, in your browser";
+    subtitle.textContent = "Quick neural network verification estimates, in your browser, with no setup";
 
     header.append(headerTop, titleRow, subtitle, renderNav(routes, activeRoute));
 
