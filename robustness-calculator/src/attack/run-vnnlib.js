@@ -27,11 +27,15 @@ export async function runVnnlibCheck({ tf, model, checker, spec, settings, onPro
 
   const boxes = spec.regions.map((r, i) => makeBox(r.lo, r.hi, spec.regions.length > 1 ? `Input region ${i + 1}` : "Input box"));
 
-  onProgress({ phase: "self-test" });
-  const testRng = deriveRng(seed, 1);
-  const test = await selfTest(tf, model, checker, (i) => sampleBox32(boxes[i % boxes.length], testRng), {
-    count: settings.selfTestSamples ?? 100,
-  });
+  // The self-test can be skipped when the caller has already run one (property sets).
+  let test = null;
+  if (settings.selfTestSamples !== 0) {
+    onProgress({ phase: "self-test" });
+    const testRng = deriveRng(seed, 1);
+    test = await selfTest(tf, model, checker, (i) => sampleBox32(boxes[i % boxes.length], testRng), {
+      count: settings.selfTestSamples ?? 100,
+    });
+  }
 
   const rng = createRng(seed);
   let bestMargin = Infinity;

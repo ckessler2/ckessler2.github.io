@@ -2,7 +2,7 @@
 // benchmarks against their published verdicts.
 //
 //   cd robustness-calculator && npm install
-//   node tests/benchmarks/crown.js [--benchmarks=mnist_fc-256x6,cora-mnist-set] [--eps=0.03,0.05]
+//   node tests/benchmarks/crown.js [--tasks=classification,properties] [--benchmarks=mnist_fc-256x6,...] [--eps=0.03,0.05]
 //
 // Defaults: every benchmark in src/spec/benchmark.js, at every ε with
 // published verdicts, with the page's default attack settings. Files are
@@ -20,10 +20,13 @@ import { parseOnnxModel } from "../../src/onnx/onnx-model.js";
 import { buildReluChain } from "../../src/bounds/crown.js";
 import { BENCHMARKS, pointFromProperty } from "../../src/spec/benchmark.js";
 import { runPointsCheck } from "../../src/attack/run-points.js";
+import { runPropertySet } from "../../src/attack/run-properties.js";
+import { parseVnnlib } from "../../src/spec/vnnlib.js";
 
 const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=")[1];
 const only = arg("benchmarks")?.split(",");
 const epsFilter = arg("eps")?.split(",");
+const tasks = arg("tasks")?.split(",");
 
 const CACHE = new URL("../../.bench-cache/", import.meta.url);
 mkdirSync(CACHE, { recursive: true });
@@ -37,14 +40,60 @@ async function cached(url) {
   return readFileSync(file);
 }
 
-const totals = { points: 0, certified: 0, counterexample: 0, unknown: 0, violations: 0, published: { unsat: 0, sat: 0, unknown: 0 }, certifiedOfUnsat: 0, foundOfSat: 0, decidedUnknown: 0 };
+const newTotals = () => ({ points: 0, certified: 0, counterexample: 0, unknown: 0, violations: 0, published: { unsat: 0, sat: 0, unknown: 0 }, certifiedOfUnsat: 0, foundOfSat: 0, decidedUnknown: 0 });
+const allTotals = {};
 
-for (const b of BENCHMARKS.filter((b) => !only || only.includes(b.id))) {
+/** Compare per-point statuses with published verdicts; returns the status line. */
+function tally(totals, b, label, rows, verdicts) {
+  return rows.map((row, i) => {
+    const v = verdicts[i];
+    totals.points++;
+    totals[row.status]++;
+    totals.published[v]++;
+    if (row.status === "certified" && v === "unsat") totals.certifiedOfUnsat++;
+    if (row.status === "counterexample" && v === "sat") totals.foundOfSat++;
+    if (row.status !== "unknown" && v === "unknown") totals.decidedUnknown++;
+    const bad = (row.status === "certified" && v === "sat") || (row.status === "counterexample" && v === "unsat");
+    if (bad) {
+      totals.violations++;
+      console.log(`  *** VIOLATION: ${b.id} ${label} ${b.imageNames[i]}: tool says ${row.status}, published ${v}`);
+    }
+    return { certified: "C", counterexample: "x", unknown: "." }[row.status];
+  });
+}
+
+for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tasks || tasks.includes(b.task)))) {
+  const totals = (allTotals[b.task] ??= newTotals());
   const bytes = new Uint8Array(await cached(b.modelUrl));
   const { model, checker } = await load(bytes);
   const chainResult = buildReluChain(parseOnnxModel(bytes), model.featureShape);
   if (chainResult.error) throw new Error(`${b.id}: ${chainResult.error}`);
   const texts = await Promise.all(b.propertyUrls.map(async (u) => (await cached(u)).toString("utf8")));
+
+  if (b.kind === "properties") {
+    const verdicts = b.reference.verdicts.all;
+    const t0 = Date.now();
+    const r = await runPropertySet({
+      tf,
+      model,
+      checker,
+      chain: chainResult,
+      properties: texts.map((t, i) => ({ name: b.imageNames[i], spec: parseVnnlib(t) })),
+      settings: { seed: 0, restarts: 400, steps: 200, schedule: "apgd", selfTestSamples: 100 },
+    });
+    const line = tally(totals, b, "", r.rows, verdicts);
+    const n = r.rows.length;
+    const pub = verdicts.filter((v) => v === "unsat").length;
+    const und = verdicts.filter((v) => v === "unknown").length;
+    const pct = (k) => `${((k / n) * 100).toFixed(1)}%`;
+    console.log(
+      `${b.id.padEnd(32)} tool ${line.join("")}  published ${verdicts.map((v) => ({ unsat: "u", sat: "s", unknown: "?" })[v]).join("")}  ` +
+        `safe share: tool [${pct(r.summary.certifiedCount)}, ${pct(n - r.summary.counterexampleCount)}], published ${und ? `${pct(pub)}–${pct(pub + und)}` : pct(pub)}  ` +
+        `(${((Date.now() - t0) / 1000).toFixed(1)} s)`,
+    );
+    continue;
+  }
+
   const pts = texts.map((t) => pointFromProperty(t, b.propertyEpsilon, { snap: b.snapPixels }));
   const points = { inputs: pts.map((p) => p.x), labels: pts.map((p) => p.label) };
 
@@ -61,29 +110,15 @@ for (const b of BENCHMARKS.filter((b) => !only || only.includes(b.id))) {
         task: "classification",
         epsilon: Number(epsText),
         seed: 0,
-        restarts: 10,
-        steps: 50,
+        restarts: 400,
+        steps: 200,
         schedule: "apgd",
-        selfTestSamples: 20,
+        selfTestSamples: 100,
         domainLo: new Array(model.inputSize).fill(0),
         domainHi: new Array(model.inputSize).fill(1),
       },
     });
-    const line = r.rows.map((row, i) => {
-      const v = verdicts[i];
-      totals.points++;
-      totals[row.status]++;
-      totals.published[v]++;
-      if (row.status === "certified" && v === "unsat") totals.certifiedOfUnsat++;
-      if (row.status === "counterexample" && v === "sat") totals.foundOfSat++;
-      if (row.status !== "unknown" && v === "unknown") totals.decidedUnknown++;
-      const bad = (row.status === "certified" && v === "sat") || (row.status === "counterexample" && v === "unsat");
-      if (bad) {
-        totals.violations++;
-        console.log(`  *** VIOLATION: ${b.id} ε=${epsText} ${b.imageNames[i]}: tool says ${row.status}, published ${v}`);
-      }
-      return { certified: "C", counterexample: "x", unknown: "." }[row.status];
-    });
+    const line = tally(totals, b, `ε=${epsText}`, r.rows, verdicts);
     const n = r.rows.length;
     const pub = verdicts.filter((v) => v === "unsat").length;
     const und = verdicts.filter((v) => v === "unknown").length;
@@ -96,9 +131,11 @@ for (const b of BENCHMARKS.filter((b) => !only || only.includes(b.id))) {
   }
 }
 
-console.log(`
-Legend: C = certified robust, x = counterexample, . = unknown; u = published robust, s = published not robust, ? = undecided.
-${totals.points} points: ${totals.certified} certified, ${totals.counterexample} counterexamples, ${totals.unknown} unknown.
-Published robust points certified: ${totals.certifiedOfUnsat}/${totals.published.unsat}. Published non-robust points with a counterexample: ${totals.foundOfSat}/${totals.published.sat}.
-Undecided points the tool decided: ${totals.decidedUnknown}/${totals.published.unknown}.
-Soundness violations: ${totals.violations}.`);
+console.log("\nLegend: C = certified, x = counterexample, . = unknown; u = published safe/robust, s = published not, ? = undecided.");
+for (const [task, t] of Object.entries(allTotals)) {
+  console.log(`
+[${task}] ${t.points} instances: ${t.certified} certified, ${t.counterexample} counterexamples, ${t.unknown} unknown.
+Published safe instances certified: ${t.certifiedOfUnsat}/${t.published.unsat}. Published unsafe instances with a counterexample: ${t.foundOfSat}/${t.published.sat}.
+Undecided instances the tool decided: ${t.decidedUnknown}/${t.published.unknown}.
+Soundness violations: ${t.violations}.`);
+}

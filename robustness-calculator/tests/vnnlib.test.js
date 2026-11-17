@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseVnnlib, regionMargin64, regionViolated64, formatCounterexample } from "../src/spec/vnnlib.js";
-import { float32AtLeast, float32AtMost, makeBox, nextFloat32Up } from "../src/attack/box.js";
+import { float32AtLeast, float32AtMost, makeBox, nextFloat32Up, boxContains } from "../src/attack/box.js";
 
 const header = `
 (declare-const X_0 Real)
@@ -91,5 +91,11 @@ test("float32 bounds are rounded inwards", () => {
   }
   const box = makeBox([0.1], [0.6]);
   assert.ok(box.lo32[0] >= 0.1 && box.hi32[0] <= 0.6);
-  assert.throws(() => makeBox([0.1], [0.1]), /contains no float32 value/);
+  // An input fixed to a value float32 cannot represent is set to the nearest float32.
+  const fixed = makeBox([0.1, 0], [0.1, 1]);
+  assert.deepEqual(fixed.rounded, [0]);
+  assert.equal(fixed.lo32[0], Math.fround(0.1));
+  assert.equal(fixed.hi32[0], Math.fround(0.1));
+  assert.ok(boxContains(fixed, [Math.fround(0.1), 0.5]));
+  assert.ok(!boxContains(fixed, [0.1000001, 0.5]));
 });

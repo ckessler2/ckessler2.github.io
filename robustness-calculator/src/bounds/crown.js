@@ -1,29 +1,39 @@
-// Certified lower bounds with CROWN (Zhang et al., 2018) for feed-forward
-// ReLU networks.
+// Certified bounds with CROWN (Zhang et al., 2018) for feed-forward ReLU
+// networks.
 //
-// 1. buildReluChain() turns the ONNX graph into a chain
-//      z_1 = W_1 x + b_1,  z_k = W_k relu(z_{k-1}) + b_k,  y = z_n
-//    by composing every run of affine operators (Gemm, MatMul, Add, Sub,
-//    Mul, Div by constants, Flatten, Reshape, Identity) into one matrix.
-//    Anything else (Sigmoid, Tanh, branching graphs) makes the model
+// 1. buildReluChain() turns the ONNX graph into a chain of layers
+//      z_1 = A_1(x),  z_k = A_k(relu(z_{k-1})),  y = z_n,
+//    where each A_k is a short list of affine operations: a dense matrix
+//    (runs of Gemm / MatMul / Add / Sub / Mul / Div by constants, Flatten,
+//    Reshape, Identity are merged into one), a 2-D convolution (kept as a
+//    convolution, never expanded into a matrix), or an element-wise
+//    scale-and-shift. Anything else (Sigmoid, Tanh, branches) makes the model
 //    uncertifiable, with the reason reported.
 // 2. crownLowerBounds() bounds C·y from below over an input box by passing
 //    linear bounds backwards through the chain. An unstable ReLU
 //    (l < 0 < u on its input) is relaxed to
 //      upper  relu(z) ≤ u (z − l) / (u − l)
 //      lower  relu(z) ≥ a z,  a = 1 if u ≥ −l, else 0.
-//    Pre-activation bounds of each hidden layer come from the same pass.
+//    Pre-activation bounds of the hidden layers come from the same backward
+//    pass, except for layers wider than CROWN_MAX_WIDTH, which use interval
+//    arithmetic (much cheaper, looser).
 //
 // Arithmetic is float64 on the float32 weights; see FLOAT_TOLERANCE.
 
 const MAX_MATRIX = 50_000_000;
+const CROWN_MAX_WIDTH = 1024;
 
 /**
  * Bounds are computed for the real-valued network. The deployed network runs
- * in float32, whose rounding can move the outputs slightly, so a margin is
- * only treated as certified when its lower bound exceeds this tolerance.
+ * in float32, whose rounding can move the outputs slightly, so a bound only
+ * counts as certified when it clears its threshold by a safety margin: the
+ * larger of 10⁻⁵ × max(1, |threshold|) and ten times the largest float32
+ * disagreement measured by the run's self-test (tf.js vs onnxruntime).
  */
-export const FLOAT_TOLERANCE = 1e-3;
+export const FLOAT_TOLERANCE = 1e-5;
+export const MEASURED_ERROR_FACTOR = 10;
+export const toleranceFor = (threshold, measuredError = 0) =>
+  Math.max(FLOAT_TOLERANCE * Math.max(1, Math.abs(threshold)), MEASURED_ERROR_FACTOR * measuredError);
 
 const prod = (a) => a.reduce((x, y) => x * y, 1);
 
@@ -55,7 +65,7 @@ function broadcastConstant(t, shape) {
 /**
  * @param parsed  output of parseOnnxModel()
  * @param featureShape  the model's input shape without the batch dimension
- * @returns {{ layers: {W: Float64Array, b: Float64Array, nin: number, nout: number}[] } | { error: string }}
+ * @returns {{ layers: {ops: object[], nin: number, nout: number}[] } | { error: string }}
  */
 export function buildReluChain(parsed, featureShape) {
   const { graph } = parsed;
@@ -69,43 +79,54 @@ export function buildReluChain(parsed, featureShape) {
 
   let cur = graph.inputs[0].name;
   let shape = featureShape.slice();
-  const nIn = prod(shape);
-  let n = nIn;
-  let W = null; // null = identity (n × n)
+  let n = prod(shape);
+  let segIn = n; // input width of the current layer
+  let ops = []; // finished operations of the current layer
+  let opIn = n; // input width of the pending affine map
+  // Pending affine map from the last finished op: null W = diagonal `s` (null s = identity).
+  let W = null;
+  let s = null;
   let b = new Float64Array(n);
-  let segIn = nIn;
   const layers = [];
 
-  const dense = () => {
-    if (W) return W;
-    const I = new Float64Array(n * n);
-    for (let i = 0; i < n; i++) I[i * n + i] = 1;
-    return I;
+  const flush = () => {
+    if (W) ops.push({ kind: "dense", W, b, nin: opIn, nout: n });
+    else if (s || b.some((v) => v !== 0)) ops.push({ kind: "diag", s: s ?? new Float64Array(n).fill(1), b, nin: n, nout: n });
+    W = null;
+    s = null;
+    b = new Float64Array(n);
+    opIn = n;
   };
   // y = M · current, M: m × n (row-major)
   const applyMatrix = (M, m) => {
-    if (m * segIn > MAX_MATRIX) throw new Error("the network is too large to certify in the browser");
-    const next = new Float64Array(m * segIn);
-    const nb = new Float64Array(m);
+    if (m * opIn > MAX_MATRIX) throw new Error("the network is too large to certify in the browser");
+    const next = new Float64Array(m * opIn);
     if (W === null) {
-      next.set(M);
+      for (let r = 0; r < m; r++) for (let i = 0; i < n; i++) next[r * opIn + i] = M[r * n + i] * (s ? s[i] : 1);
     } else {
       for (let r = 0; r < m; r++) {
         for (let i = 0; i < n; i++) {
           const v = M[r * n + i];
           if (v === 0) continue;
-          for (let c = 0; c < segIn; c++) next[r * segIn + c] += v * W[i * segIn + c];
+          for (let c = 0; c < opIn; c++) next[r * opIn + c] += v * W[i * opIn + c];
         }
       }
     }
+    const nb = new Float64Array(m);
     for (let r = 0; r < m; r++) {
-      let s = 0;
-      for (let i = 0; i < n; i++) s += M[r * n + i] * b[i];
-      nb[r] = s;
+      let sum = 0;
+      for (let i = 0; i < n; i++) sum += M[r * n + i] * b[i];
+      nb[r] = sum;
     }
     W = next;
+    s = null;
     b = nb;
     n = m;
+  };
+  const scaleRows = (v) => {
+    if (W) for (let i = 0; i < n; i++) for (let c = 0; c < opIn; c++) W[i * opIn + c] *= v[i];
+    else s = Float64Array.from(v, (x, i) => x * (s ? s[i] : 1));
+    for (let i = 0; i < n; i++) b[i] *= v[i];
   };
 
   try {
@@ -122,6 +143,7 @@ export function buildReluChain(parsed, featureShape) {
 
       switch (node.opType) {
         case "Identity":
+        case "Dropout":
           break;
         case "Flatten":
           shape = [prod(shape)];
@@ -144,15 +166,12 @@ export function buildReluChain(parsed, featureShape) {
           if (node.opType === "Add") for (let i = 0; i < n; i++) b[i] += v[i];
           else if (node.opType === "Sub" && !constFirst) for (let i = 0; i < n; i++) b[i] -= v[i];
           else if (node.opType === "Div" && constFirst) return { error: "division by the network's input is not affine" };
+          else if (node.opType === "Mul") scaleRows(v);
+          else if (node.opType === "Div") scaleRows(v.map((x) => 1 / x));
           else {
-            // Scale rows: Mul by v, Div by v, or c − x (scale −1 then add c).
-            const s = node.opType === "Mul" ? v : node.opType === "Div" ? v.map((x) => 1 / x) : v.map(() => -1);
-            if (W === null) W = dense();
-            for (let i = 0; i < n; i++) {
-              for (let col = 0; col < segIn; col++) W[i * segIn + col] *= s[i];
-              b[i] *= s[i];
-            }
-            if (node.opType === "Sub") for (let i = 0; i < n; i++) b[i] += v[i];
+            // c − x
+            scaleRows(v.map(() => -1));
+            for (let i = 0; i < n; i++) b[i] += v[i];
           }
           break;
         }
@@ -181,10 +200,45 @@ export function buildReluChain(parsed, featureShape) {
           shape = [...shape.slice(0, -1), m];
           break;
         }
-        case "Relu":
-          layers.push({ W: dense(), b, nin: segIn, nout: n });
-          W = null;
+        case "Conv": {
+          if (shape.length !== 3) return { error: "Conv needs a [channels, height, width] input" };
+          if ((a.group ?? 1) !== 1) return { error: "grouped convolutions are not supported" };
+          if (a.auto_pad && a.auto_pad !== "NOTSET") return { error: `Conv auto_pad=${a.auto_pad} is not supported` };
+          const K = statics.get(node.inputs[1]);
+          if (!K || K.dims.length !== 4) return { error: "Conv needs a constant 4-D weight" };
+          const [Cout, Cin, kh, kw] = K.dims;
+          const [Cin0, Hin, Win] = shape;
+          if (Cin !== Cin0) return { error: "Conv weight shape does not match" };
+          const [pt, pl, pb, pr] = a.pads ?? [0, 0, 0, 0];
+          const [sh, sw] = a.strides ?? [1, 1];
+          const [dh, dw] = a.dilations ?? [1, 1];
+          const Hout = Math.floor((Hin + pt + pb - dh * (kh - 1) - 1) / sh) + 1;
+          const Wout = Math.floor((Win + pl + pr - dw * (kw - 1) - 1) / sw) + 1;
+          flush();
+          const bias = new Float64Array(Cout);
+          if (node.inputs[2]) {
+            const B = statics.get(node.inputs[2]);
+            if (!B) return { error: "Conv bias must be constant" };
+            bias.set(Float64Array.from(B.data));
+          }
+          ops.push({
+            kind: "conv",
+            K: Float64Array.from(K.data),
+            bias,
+            Cin, Hin, Win, Cout, Hout, Wout, kh, kw, sh, sw, pt, pl, dh, dw,
+            nin: n,
+            nout: Cout * Hout * Wout,
+          });
+          shape = [Cout, Hout, Wout];
+          n = Cout * Hout * Wout;
           b = new Float64Array(n);
+          opIn = n;
+          break;
+        }
+        case "Relu":
+          flush();
+          layers.push({ ops, nin: segIn, nout: n });
+          ops = [];
           segIn = n;
           break;
         default:
@@ -196,8 +250,177 @@ export function buildReluChain(parsed, featureShape) {
     return { error: err.message };
   }
   if (cur !== graph.outputs[0].name) return { error: "the output is not at the end of the layer chain" };
-  layers.push({ W: dense(), b, nin: segIn, nout: n });
+  flush();
+  layers.push({ ops, nin: segIn, nout: n });
   return { layers };
+}
+
+// ---------------------------------------------------------------------------
+// Operations: forward (point and interval) and backward (row vectors).
+
+function forwardOp(op, x) {
+  if (op.kind === "dense") {
+    const { W, b, nin, nout } = op;
+    const y = new Float64Array(nout);
+    for (let o = 0; o < nout; o++) {
+      let sum = b[o];
+      for (let i = 0; i < nin; i++) sum += W[o * nin + i] * x[i];
+      y[o] = sum;
+    }
+    return y;
+  }
+  if (op.kind === "diag") return Float64Array.from(x, (v, i) => op.s[i] * v + op.b[i]);
+  return convForward(op, x, null).lo;
+}
+
+/** Interval through one op: exact for a single affine op. */
+function intervalOp(op, lo, hi) {
+  if (op.kind === "dense") {
+    const { W, b, nin, nout } = op;
+    const l = new Float64Array(nout);
+    const u = new Float64Array(nout);
+    for (let o = 0; o < nout; o++) {
+      let a = b[o];
+      let z = b[o];
+      for (let i = 0; i < nin; i++) {
+        const w = W[o * nin + i];
+        if (w >= 0) {
+          a += w * lo[i];
+          z += w * hi[i];
+        } else {
+          a += w * hi[i];
+          z += w * lo[i];
+        }
+      }
+      l[o] = a;
+      u[o] = z;
+    }
+    return { lo: l, hi: u };
+  }
+  if (op.kind === "diag") {
+    const l = new Float64Array(op.nout);
+    const u = new Float64Array(op.nout);
+    for (let i = 0; i < op.nout; i++) {
+      const a = op.s[i] * lo[i] + op.b[i];
+      const z = op.s[i] * hi[i] + op.b[i];
+      l[i] = Math.min(a, z);
+      u[i] = Math.max(a, z);
+    }
+    return { lo: l, hi: u };
+  }
+  return convForward(op, lo, hi);
+}
+
+/** Convolution of a point (hi = null) or an interval [lo, hi]. */
+function convForward(op, lo, hi) {
+  const { K, bias, Cin, Hin, Win, Cout, Hout, Wout, kh, kw, sh, sw, pt, pl, dh, dw } = op;
+  const outL = new Float64Array(Cout * Hout * Wout);
+  const outU = hi ? new Float64Array(Cout * Hout * Wout) : null;
+  for (let co = 0; co < Cout; co++) {
+    for (let ho = 0; ho < Hout; ho++) {
+      for (let wo = 0; wo < Wout; wo++) {
+        let a = bias[co];
+        let z = bias[co];
+        for (let ci = 0; ci < Cin; ci++) {
+          for (let i = 0; i < kh; i++) {
+            const hiIdx = ho * sh - pt + i * dh;
+            if (hiIdx < 0 || hiIdx >= Hin) continue;
+            for (let j = 0; j < kw; j++) {
+              const wiIdx = wo * sw - pl + j * dw;
+              if (wiIdx < 0 || wiIdx >= Win) continue;
+              const w = K[((co * Cin + ci) * kh + i) * kw + j];
+              const idx = (ci * Hin + hiIdx) * Win + wiIdx;
+              if (!hi) a += w * lo[idx];
+              else if (w >= 0) {
+                a += w * lo[idx];
+                z += w * hi[idx];
+              } else {
+                a += w * hi[idx];
+                z += w * lo[idx];
+              }
+            }
+          }
+        }
+        const o = (co * Hout + ho) * Wout + wo;
+        outL[o] = a;
+        if (outU) outU[o] = z;
+      }
+    }
+  }
+  return { lo: outL, hi: outU };
+}
+
+/** Rows lam (m × op.nout) → lam·op (m × op.nin); adds lam·bias to c. */
+function backwardOp(op, lam, m, c) {
+  if (op.kind === "dense") {
+    const { W, b, nin, nout } = op;
+    for (let r = 0; r < m; r++) {
+      let sum = 0;
+      for (let o = 0; o < nout; o++) sum += lam[r * nout + o] * b[o];
+      c[r] += sum;
+    }
+    const next = new Float64Array(m * nin);
+    for (let r = 0; r < m; r++) {
+      for (let o = 0; o < nout; o++) {
+        const v = lam[r * nout + o];
+        if (v === 0) continue;
+        const wo = o * nin;
+        const nr = r * nin;
+        for (let i = 0; i < nin; i++) next[nr + i] += v * W[wo + i];
+      }
+    }
+    return next;
+  }
+  if (op.kind === "diag") {
+    const n = op.nout;
+    const next = new Float64Array(m * n);
+    for (let r = 0; r < m; r++) {
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        sum += lam[r * n + i] * op.b[i];
+        next[r * n + i] = lam[r * n + i] * op.s[i];
+      }
+      c[r] += sum;
+    }
+    return next;
+  }
+  const { K, bias, Cin, Hin, Win, Cout, Hout, Wout, kh, kw, sh, sw, pt, pl, dh, dw, nin, nout } = op;
+  const next = new Float64Array(m * nin);
+  for (let r = 0; r < m; r++) {
+    let sum = 0;
+    for (let co = 0; co < Cout; co++) {
+      for (let ho = 0; ho < Hout; ho++) {
+        for (let wo = 0; wo < Wout; wo++) {
+          const v = lam[r * nout + (co * Hout + ho) * Wout + wo];
+          if (v === 0) continue;
+          sum += v * bias[co];
+          for (let ci = 0; ci < Cin; ci++) {
+            for (let i = 0; i < kh; i++) {
+              const hiIdx = ho * sh - pt + i * dh;
+              if (hiIdx < 0 || hiIdx >= Hin) continue;
+              for (let j = 0; j < kw; j++) {
+                const wiIdx = wo * sw - pl + j * dw;
+                if (wiIdx < 0 || wiIdx >= Win) continue;
+                next[r * nin + (ci * Hin + hiIdx) * Win + wiIdx] += v * K[((co * Cin + ci) * kh + i) * kw + j];
+              }
+            }
+          }
+        }
+      }
+    }
+    c[r] += sum;
+  }
+  return next;
+}
+
+/** Forward pass of the chain at a point (float64); used by tests. */
+export function chainForward(chain, x) {
+  let h = Float64Array.from(x);
+  chain.layers.forEach((layer, k) => {
+    for (const op of layer.ops) h = forwardOp(op, h);
+    if (k < chain.layers.length - 1) h = h.map((v) => Math.max(0, v));
+  });
+  return h;
 }
 
 /**
@@ -207,28 +430,12 @@ export function buildReluChain(parsed, featureShape) {
  */
 function backward(layers, k, A, m, lo, hi, bounds) {
   let lam = A;
-  let width = layers[k].nout;
   const c = new Float64Array(m);
   for (let j = k; j >= 0; j--) {
-    const { W, b, nin, nout } = layers[j];
-    for (let r = 0; r < m; r++) {
-      let s = 0;
-      for (let o = 0; o < nout; o++) s += lam[r * width + o] * b[o];
-      c[r] += s;
-    }
-    const next = new Float64Array(m * nin);
-    for (let r = 0; r < m; r++) {
-      for (let o = 0; o < nout; o++) {
-        const v = lam[r * width + o];
-        if (v === 0) continue;
-        const wo = o * nin;
-        const nr = r * nin;
-        for (let i = 0; i < nin; i++) next[nr + i] += v * W[wo + i];
-      }
-    }
-    lam = next;
-    width = nin;
+    const ops = layers[j].ops;
+    for (let q = ops.length - 1; q >= 0; q--) lam = backwardOp(ops[q], lam, m, c);
     if (j === 0) break;
+    const nin = layers[j].nin;
     const { l, u } = bounds[j - 1];
     for (let i = 0; i < nin; i++) {
       const li = l[i];
@@ -248,6 +455,7 @@ function backward(layers, k, A, m, lo, hi, bounds) {
       }
     }
   }
+  const width = layers[0].nin;
   const out = new Float64Array(m);
   for (let r = 0; r < m; r++) {
     let s = c[r];
@@ -260,34 +468,48 @@ function backward(layers, k, A, m, lo, hi, bounds) {
   return out;
 }
 
+function intervalLayer(layer, lo, hi) {
+  let l = lo;
+  let u = hi;
+  for (const op of layer.ops) ({ lo: l, hi: u } = intervalOp(op, l, u));
+  return { l, u };
+}
+
+/** Lower bounds of C·y (C: m × outputs) over the box [lo, hi] from interval arithmetic alone (cheap, loose). */
+export function intervalLowerBounds(chain, lo, hi, C, m) {
+  let l = lo;
+  let u = hi;
+  chain.layers.forEach((layer, k) => {
+    ({ l, u } = intervalLayer(layer, l, u));
+    if (k < chain.layers.length - 1) {
+      l = l.map((v) => Math.max(0, v));
+      u = u.map((v) => Math.max(0, v));
+    }
+  });
+  const nOut = l.length;
+  const out = new Float64Array(m);
+  for (let r = 0; r < m; r++) {
+    let s = 0;
+    for (let j = 0; j < nOut; j++) {
+      const a = C[r * nOut + j];
+      s += a >= 0 ? a * l[j] : a * u[j];
+    }
+    out[r] = s;
+  }
+  return out;
+}
+
 /** Lower bounds of C·y (C: m × outputs) over the box [lo, hi]. */
 export function crownLowerBounds(chain, lo, hi, C, m) {
   const { layers } = chain;
   const bounds = [];
   for (let k = 0; k < layers.length - 1; k++) {
     const n = layers[k].nout;
-    if (k === 0) {
-      // First layer: interval arithmetic on an affine map is exact.
-      const l = new Float64Array(n);
-      const u = new Float64Array(n);
-      const { W, b, nin } = layers[0];
-      for (let o = 0; o < n; o++) {
-        let a = b[o];
-        let z = b[o];
-        for (let i = 0; i < nin; i++) {
-          const w = W[o * nin + i];
-          if (w >= 0) {
-            a += w * lo[i];
-            z += w * hi[i];
-          } else {
-            a += w * hi[i];
-            z += w * lo[i];
-          }
-        }
-        l[o] = a;
-        u[o] = z;
-      }
-      bounds.push({ l, u });
+    if (k === 0 || n > CROWN_MAX_WIDTH) {
+      // Interval arithmetic: exact for the first layer when it is one affine op.
+      const prevL = k === 0 ? lo : bounds[k - 1].l.map((v) => Math.max(0, v));
+      const prevU = k === 0 ? hi : bounds[k - 1].u.map((v) => Math.max(0, v));
+      bounds.push(intervalLayer(layers[k], prevL, prevU));
       continue;
     }
     const A = new Float64Array(2 * n * n);
@@ -296,7 +518,11 @@ export function crownLowerBounds(chain, lo, hi, C, m) {
       A[(n + i) * n + i] = -1;
     }
     const lb = backward(layers, k, A, 2 * n, lo, hi, bounds);
-    bounds.push({ l: lb.slice(0, n), u: lb.slice(n).map((v) => -v) });
+    // Keep the tighter of CROWN and interval bounds.
+    const ib = intervalLayer(layers[k], bounds[k - 1].l.map((v) => Math.max(0, v)), bounds[k - 1].u.map((v) => Math.max(0, v)));
+    const l = lb.slice(0, n).map((v, i) => Math.max(v, ib.l[i]));
+    const u = lb.slice(n).map((v, i) => Math.min(-v, ib.u[i]));
+    bounds.push({ l, u });
   }
   return backward(layers, layers.length - 1, C, m, lo, hi, bounds);
 }

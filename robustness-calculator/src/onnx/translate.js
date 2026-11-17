@@ -23,6 +23,8 @@ export const SUPPORTED_OPS = [
   "Reshape",
   "Constant",
   "Identity",
+  "Dropout",
+  "Conv",
 ];
 
 const prod = (arr) => arr.reduce((a, b) => a * b, 1);
@@ -161,8 +163,32 @@ export function translateModel(tf, parsed) {
       let y;
       switch (node.opType) {
         case "Identity":
+        case "Dropout": // inference: Dropout is the identity
           y = x();
           break;
+        case "Conv": {
+          // ONNX NCHW → tf.js NHWC, 2-D convolution, group = 1.
+          const t = x();
+          const Wt = get(node.inputs[1]); // [Cout, Cin, kh, kw]
+          if (t.rank !== 4) throw new Error("Conv is supported for 2-D (4-D tensor) inputs only.");
+          if ((a.group ?? 1) !== 1) throw new Error("Grouped convolutions are not supported.");
+          const [ph0, pw0, ph1, pw1] = a.pads ?? [0, 0, 0, 0];
+          if (a.auto_pad && a.auto_pad !== "NOTSET") throw new Error(`Conv auto_pad=${a.auto_pad} is not supported.`);
+          const strides = a.strides ?? [1, 1];
+          const dilations = a.dilations ?? [1, 1];
+          let out = tf.conv2d(
+            tf.transpose(t, [0, 2, 3, 1]),
+            tf.transpose(Wt, [2, 3, 1, 0]),
+            strides,
+            [[0, 0], [ph0, ph1], [pw0, pw1], [0, 0]],
+            "NHWC",
+            dilations,
+          );
+          out = tf.transpose(out, [0, 3, 1, 2]);
+          if (node.inputs[2]) out = tf.add(out, tf.reshape(get(node.inputs[2]), [1, -1, 1, 1]));
+          y = out;
+          break;
+        }
         case "Add":
           y = tf.add(x(), get(node.inputs[1]));
           break;

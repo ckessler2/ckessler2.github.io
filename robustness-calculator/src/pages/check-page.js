@@ -3,11 +3,12 @@ import { createField } from "../components/field.js";
 import { createFileInput, readFileBytes, gunzip, stripGz } from "../components/file-input.js";
 import { createStatGrid, createDataTable, formatNumber, formatTime } from "../components/stats.js";
 import { createEpsilonHistogram } from "../components/histogram.js";
+import { createSplitBars } from "../components/split-bars.js";
 import { downloadTextFile } from "../components/download.js";
 import { parseVnnlib } from "../spec/vnnlib.js";
 import { TASKS } from "../spec/points.js";
 import { BENCHMARKS, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
-import { DISCLAIMER, disclaimerFor } from "../attack/report.js";
+import { disclaimerFor } from "../attack/report.js";
 import { TFJS_VERSION, ORT_VERSION } from "../lib/cdn.js";
 
 
@@ -85,19 +86,23 @@ async function loadModelBytes(ctx, fileName, bytes) {
   rerender();
 }
 
-function loadSpecText(ctx, fileName, text) {
+/** Property files ({ name, text }); checks that each parses and that they agree on sizes. */
+function loadSpecFiles(ctx, files, extra = {}) {
   const { state } = ctx;
   try {
-    const spec = parseVnnlib(text);
-    const summary = {
-      numInputs: spec.numInputs,
-      numOutputs: spec.numOutputs,
-      regions: spec.regions.length,
-      disjuncts: spec.regions.reduce((a, r) => a + r.disjuncts.length, 0),
-    };
-    state.set("vnnlib", { fileName, text, summary });
+    let numInputs = null;
+    let numOutputs = null;
+    for (const f of files) {
+      const spec = parseVnnlib(f.text);
+      if (numInputs !== null && (spec.numInputs !== numInputs || spec.numOutputs !== numOutputs)) {
+        throw new Error(`${f.name} has a different number of inputs or outputs from the other properties.`);
+      }
+      numInputs = spec.numInputs;
+      numOutputs = spec.numOutputs;
+    }
+    state.set("vnnlib", { files, summary: { count: files.length, numInputs, numOutputs }, ...extra });
   } catch (err) {
-    state.set("vnnlib", { fileName, error: err.message });
+    state.set("vnnlib", { files: [], error: err.message });
   }
 }
 
@@ -116,6 +121,7 @@ async function fetchBytes(url) {
 async function loadBenchmark(ctx, id) {
   const bench = BENCHMARKS.find((b) => b.id === id) ?? BENCHMARKS[0];
   const { state, rerender } = ctx;
+  if (bench.kind === "properties") return loadPropertyBenchmark(ctx, bench);
   state.set("mode", "points");
   state.set("run", { status: "idle" });
   state.set("model", { fileName: bench.modelName, loading: true });
@@ -138,6 +144,28 @@ async function loadBenchmark(ctx, id) {
   }
 }
 
+async function loadPropertyBenchmark(ctx, bench) {
+  const { state, rerender } = ctx;
+  state.set("mode", "vnnlib");
+  state.patch("pointsSettings", { task: "properties" });
+  state.set("run", { status: "idle" });
+  state.set("model", { fileName: bench.modelName, loading: true });
+  rerender();
+  try {
+    const [modelBytes, ...props] = await Promise.all([fetchBytes(bench.modelUrl), ...bench.propertyUrls.map(fetchBytes)]);
+    const decoder = new TextDecoder();
+    loadSpecFiles(
+      ctx,
+      props.map((b, i) => ({ name: bench.imageNames[i], text: decoder.decode(b) })),
+      { reference: bench.reference, label: "benchmark properties" },
+    );
+    await loadModelBytes(ctx, bench.modelName, modelBytes);
+  } catch (err) {
+    state.set("model", { error: `Could not load the benchmark: ${err.message}` });
+    rerender();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Controls
 
@@ -149,10 +177,8 @@ function renderSetupSection(ctx) {
   const set = (key) => (v) => state.patch("pointsSettings", { [key]: v });
   const content = el("div", "page-flow");
 
-  // 1. Robustness type (VNNLIB mode takes its property from the file instead).
-  if (s.mode === "vnnlib") {
-    content.append(note("The property comes from the VNNLIB file (untested mode; switch back under Advanced)."));
-  } else {
+  // 1. Robustness type ("output constraints" takes VNNLIB property files instead of points).
+  {
     content.append(
       selectField({
         name: "task",
@@ -161,6 +187,7 @@ function renderSetupSection(ctx) {
         options: Object.entries(TASKS).map(([value, label]) => ({ value, label })),
         onChange: (v) => {
           state.patch("pointsSettings", { task: v });
+          state.set("mode", v === "properties" ? "vnnlib" : "points");
           rerender();
         },
       }),
@@ -217,9 +244,13 @@ function renderSetupSection(ctx) {
     content.append(
       createFileInput({
         accept: ".vnnlib,.gz,.txt,.smt2",
-        label: "Property (.vnnlib)",
-        onFile: async (file) => {
-          loadSpecText(ctx, stripGz(file.name), new TextDecoder().decode(await readFileBytes(file)));
+        label: "Properties (.vnnlib, one or more)",
+        multiple: true,
+        onFile: async (files) => {
+          const decoder = new TextDecoder();
+          const loaded = [];
+          for (const file of files) loaded.push({ name: stripGz(file.name).replace(/\.vnnlib$/i, ""), text: decoder.decode(await readFileBytes(file)) });
+          loadSpecFiles(ctx, loaded, { label: loaded.length === 1 ? loaded[0].name : "property files" });
           rerender();
         },
       }),
@@ -263,31 +294,18 @@ function renderAdvancedSection(ctx) {
   const setP = (key) => (v) => state.patch("pointsSettings", { [key]: v });
   const content = el("div", "page-flow");
 
-  content.append(
-    selectField({
-      name: "mode",
-      label: "What to check",
-      value: s.mode,
-      options: [
-        { value: "points", label: "Robustness around points" },
-        { value: "vnnlib", label: "VNNLIB property (untested)" },
-      ],
-      onChange: (v) => {
-        state.set("mode", v);
-        rerender();
-      },
-    }),
-  );
+  if (ps.task === "classification" || ps.task === "properties") {
+    const certLabel = el("label", "checkbox");
+    const certBox = document.createElement("input");
+    certBox.type = "checkbox";
+    certBox.checked = a.certify !== false;
+    certBox.addEventListener("change", () => state.patch("attack", { certify: certBox.checked }));
+    certLabel.append(certBox, " Certify with CROWN before attacking");
+    content.append(certLabel);
+  }
 
   if (s.mode === "points") {
     if (ps.task === "classification") {
-      const certLabel = el("label", "checkbox");
-      const certBox = document.createElement("input");
-      certBox.type = "checkbox";
-      certBox.checked = a.certify !== false;
-      certBox.addEventListener("change", () => state.patch("attack", { certify: certBox.checked }));
-      certLabel.append(certBox, " Certify with CROWN before attacking");
-      content.append(certLabel);
       const label = el("label", "checkbox");
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -361,14 +379,16 @@ function validateSettings(attack) {
 function progressText(p) {
   if (!p) return "Starting…";
   if (p.phase === "self-test") return "Self-test: comparing the tf.js translation with onnxruntime-web…";
+  const unit = p.region !== undefined || p.unit === "property" ? "property" : "point";
   if (p.phase === "certify") {
     const at = p.epsilon !== undefined ? ` at ε = ${formatNumber(p.epsilon, 4)}` : "";
-    return `point ${p.point + 1}/${p.points} · certifying with CROWN${at}`;
+    return `${p.points > 0 ? `${unit} ${p.point + 1}/${p.points} · ` : ""}certifying with CROWN${at}`;
   }
   const step = `step ${p.step}/${p.steps}`;
   if (p.region !== undefined) {
+    const which = p.points > 0 ? `property ${p.point + 1}/${p.points} · ` : "";
     const where = p.regions > 1 ? `region ${p.region + 1}/${p.regions} · ` : "";
-    return `${where}${step} · best margin ${formatNumber(p.bestMargin, 4)}`;
+    return `${which}${where}${step} · best margin ${formatNumber(p.bestMargin, 4)}`;
   }
   const eps = p.epsilon !== undefined ? ` · ε = ${formatNumber(p.epsilon, 4)}` : "";
   return `point ${p.point + 1}/${p.points} · ${step}${eps}`;
@@ -377,7 +397,10 @@ function progressText(p) {
 function progressFraction(p) {
   if (!p || (p.phase !== "attack" && p.phase !== "certify")) return 0;
   if (p.phase === "certify") return p.point / p.points;
-  if (p.region !== undefined) return (p.region + p.step / p.steps) / p.regions;
+  if (p.region !== undefined) {
+    const within = (p.region + p.step / p.steps) / p.regions;
+    return p.points > 0 ? (p.point + within) / p.points : within;
+  }
   return (p.point + p.step / p.steps) / p.points;
 }
 
@@ -395,11 +418,11 @@ function statusText(state) {
   if (run.status === "done") return `Finished in ${formatTime(run.result.timeMs)}.`;
   if (s.model?.loading) return `Loading ${s.model.fileName ?? "the model"}…`;
   if (!s.model?.summary) return "Load a model to start.";
-  if (s.mode === "vnnlib" && !s.vnnlib?.summary) return "Load a VNNLIB property.";
+  if (s.mode === "vnnlib" && !s.vnnlib?.summary) return "Load one or more VNNLIB properties.";
   if (s.mode === "points" && !s.points?.text) return "Load a CSV of points.";
   const ms = s.model.summary;
   const modelText = `${s.model.fileName} (${ms.inputSize} → ${ms.outputSize})`;
-  const dataText = s.mode === "vnnlib" ? s.vnnlib.fileName : `${s.points.fileName} (${s.points.rows})`;
+  const dataText = s.mode === "vnnlib" ? `${s.vnnlib.label} (${s.vnnlib.summary.count})` : `${s.points.fileName} (${s.points.rows})`;
   return `Ready: ${modelText}, ${dataText}`;
 }
 
@@ -427,8 +450,8 @@ async function startRun(ctx) {
   let type;
   let payload;
   if (s.mode === "vnnlib") {
-    type = "run-vnnlib";
-    payload = { text: s.vnnlib.text, settings };
+    type = "run-properties";
+    payload = { files: s.vnnlib.files, settings };
   } else {
     const ps = s.pointsSettings;
     if (!(ps.epsilon > 0)) {
@@ -455,9 +478,13 @@ async function startRun(ctx) {
 
   const meta = {
     model: s.model.fileName,
-    property: s.mode === "vnnlib" ? s.vnnlib.fileName : s.points.fileName,
-    imageNames: s.mode === "points" ? s.points.imageNames : undefined,
+    property: s.mode === "vnnlib" ? `${s.vnnlib.label} (${s.vnnlib.files.length})` : s.points.fileName,
+    imageNames: s.mode === "points" ? s.points.imageNames : s.vnnlib.files.map((f) => f.name),
   };
+  const propRef = s.mode === "vnnlib" ? s.vnnlib.reference : null;
+  if (propRef && propRef.verdicts.all.length === s.vnnlib.files.length) {
+    meta.reference = { verdicts: propRef.verdicts.all, source: propRef.source, sourceUrl: propRef.sourceUrl };
+  }
   // Published verdicts for this exact ε, if the loaded points came with them.
   const ref = s.mode === "points" && s.pointsSettings.task === "classification" ? s.points.reference : null;
   const verdicts = ref?.verdicts?.[String(s.pointsSettings.epsilon)];
@@ -560,55 +587,64 @@ function selfTestWarning(result) {
   );
 }
 
-function renderVnnlibResult(ctx, result) {
+function renderPropertiesResult(ctx, result) {
   const { state } = ctx;
   const group = el("div", "accordion-group");
+  const sm = result.summary;
+  const certified = sm.certification === "crown";
 
   const summary = el("div", "page-flow");
-  summary.append(
-    el("p", `verdict ${result.verdict === "sat" ? "verdict-sat" : "verdict-unknown"}`, result.verdictText),
-    createStatGrid([
-      { label: "Best margin found", value: formatNumber(result.bestMargin), title: "min over the attack of max(a·y − b); ≤ 0 means the unsafe condition holds" },
-      { label: "Time", value: formatTime(result.timeMs) },
-      { label: "Input regions", value: String(result.regions) },
-      { label: "Spurious candidates", value: String(result.spuriousCandidates), title: "tf.js candidates that failed the onnxruntime float64 re-check" },
-      { label: "Self-test max rel. error", value: formatNumber(result.selfTest.maxRelError, 3) },
-    ]),
-  );
+  summary.append(...renderStatusOverview(result, { rangeLabel: "Safe share", safe: "safe", unsafe: "unsafe" }));
+  const ref = result.meta.reference;
+  if (sm.certification === "unavailable") {
+    summary.append(note(`Certification was not available for this model (${sm.certificationNote}), so only the attack ran.`));
+  }
   const warn = selfTestWarning(result);
   if (warn) summary.append(warn);
-  summary.append(el("p", "disclaimer", DISCLAIMER));
+  if (!certified) summary.append(el("p", "disclaimer", disclaimerFor(result)));
   group.append(accordion(state, "result", "Result", summary));
 
-  if (result.counterexample) {
-    const ce = result.counterexample;
-    const content = el("div", "page-flow");
-    const rows = [
-      ...ce.x.map((v, i) => ({ name: `X_${i}`, v })),
-      ...ce.y.map((v, j) => ({ name: `Y_${j}`, v })),
-    ];
-    content.append(
-      note(
-        `Re-checked with onnxruntime-web: the outputs satisfy the unsafe condition (margin ${formatNumber(ce.margin)} in float64)` +
-          (result.regions > 1 ? `, in input region ${ce.region + 1}.` : "."),
-      ),
-      createDataTable(
-        [
-          { label: "Variable", value: (r) => r.name },
-          { label: "Value", value: (r) => String(r.v) },
-        ],
-        rows,
-      ),
-    );
-    const buttons = el("div", "button-row");
-    const dl = el("button", "header-action-button", "Download counterexample (VNN-COMP format)");
-    dl.type = "button";
-    dl.addEventListener("click", () => downloadTextFile(ce.text, "counterexample.txt", "text/plain"));
-    buttons.append(dl);
-    content.append(buttons);
-    group.append(accordion(state, "counterexample", "Counterexample", content));
+  const names = result.meta.imageNames;
+  const cols = [
+    { label: "#", value: (r) => `${r.index + 1} (${names?.[r.index] ?? r.name})` },
+    {
+      label: "Result",
+      value: (r) => r.status,
+      className: (r) => (r.status === "counterexample" ? "cell-bad" : r.status === "certified" ? "cell-ok" : ""),
+    },
+    ...(certified
+      ? [
+          {
+            label: "Slack ≥ (CROWN)",
+            title: "Certified lower bound on how far the unsafe condition is from holding over the whole box; certified when positive beyond the float32 tolerance. Low-dimensional boxes may instead be certified by splitting them into pieces.",
+            value: (r) => (r.status === "certified" && r.certifiedBySplitting ? `by splitting (${r.splitPieces} pieces)` : r.certifiedSlack === undefined ? "–" : formatNumber(r.certifiedSlack, 4)),
+          },
+        ]
+      : []),
+    { label: "Margin ≤ (attack)", title: "Smallest unsafe-condition margin the attack reached; ≤ 0 means a counterexample", value: (r) => (r.bestMargin === undefined ? "–" : formatNumber(r.bestMargin, 4)) },
+  ];
+  if (ref) {
+    cols.push({
+      label: "Published",
+      value: (r) => ({ unsat: "safe", sat: "unsafe" })[ref.verdicts[r.index]] ?? "undecided",
+      className: (r) =>
+        (r.status === "counterexample" && ref.verdicts[r.index] === "unsat") || (r.status === "certified" && ref.verdicts[r.index] === "sat") ? "cell-bad" : "",
+    });
   }
-
+  const table = el("div", "page-flow");
+  table.append(createDataTable(cols, result.rows));
+  const ces = result.rows.filter((r) => r.counterexample);
+  if (ces.length) {
+    const buttons = el("div", "button-row");
+    const dl = el("button", "header-action-button", `Download counterexamples (${ces.length}, VNN-COMP format)`);
+    dl.type = "button";
+    dl.addEventListener("click", () =>
+      downloadTextFile(ces.map((r) => `; ${names?.[r.index] ?? r.name}\n${r.counterexample.text}`).join("\n"), "counterexamples.txt", "text/plain"),
+    );
+    buttons.append(dl);
+    table.append(buttons);
+  }
+  group.append(accordion(state, "points-table", "Per-property results", table));
   group.append(renderReproducibility(ctx, result));
   return group;
 }
@@ -621,29 +657,20 @@ function renderPointsResult(ctx, result) {
   const sm = result.summary;
   const chips = [];
 
+  const ref = result.meta.reference;
   if (result.task === "classification") {
-    const n = result.rows.length;
     const pct = (v) => `${(v * 100).toFixed(1)}%`;
-    const certified = sm.certification === "crown";
-    chips.push(
-      { label: "Clean accuracy", value: pct(sm.cleanAccuracy) },
-      certified
-        ? {
-            label: `Robust accuracy at ε = ${formatNumber(s.epsilon)}`,
-            value: sm.robustAccuracyLowerBound === sm.robustAccuracyUpperBound ? pct(sm.robustAccuracyUpperBound) : `${pct(sm.robustAccuracyLowerBound)} – ${pct(sm.robustAccuracyUpperBound)}`,
-            title: "Lower end: points certified robust. Upper end: points without a counterexample.",
-          }
-        : { label: `Robust accuracy at ε = ${formatNumber(s.epsilon)} (upper bound)`, value: pct(sm.robustAccuracyUpperBound) },
-    );
-    if (certified) chips.push({ label: "Certified robust", value: `${sm.certifiedCount} / ${n}` });
-    chips.push({ label: "Counterexamples", value: `${sm.brokenCount} / ${n}` });
-    if (certified) chips.push({ label: "Unknown", value: `${sm.unknownCount} / ${n}` });
+    const extra = [];
+    if (sm.cleanAccuracy < 1) extra.push({ label: "Clean accuracy", value: pct(sm.cleanAccuracy) });
     if (sm.medianSmallestEpsilon !== null) {
-      chips.push({
-        label: "Median smallest breaking ε",
+      extra.push({
+        label: "Median breaking ε",
         value: Number.isFinite(sm.medianSmallestEpsilon) ? `≤ ${formatNumber(sm.medianSmallestEpsilon)}` : `> ${formatNumber(s.epsilon)}`,
       });
     }
+    summary.append(
+      ...renderStatusOverview(result, { rangeLabel: `Robust accuracy at ε = ${formatNumber(s.epsilon)}`, safe: "robust", unsafe: "not robust", extraChips: extra }),
+    );
   } else {
     const lip = result.task === "regression-lipschitz";
     chips.push(
@@ -654,10 +681,10 @@ function renderPointsResult(ctx, result) {
       chips.push({ label: lip ? `Exceed L = ${formatNumber(s.lipschitz)}` : `Exceed δ = ${formatNumber(s.delta)}`, value: `${sm.failCount} / ${result.rows.length}` });
     }
   }
-  chips.push({ label: "Time", value: formatTime(result.timeMs) });
-  summary.append(createStatGrid(chips));
-  const ref = result.meta.reference;
-  if (ref) summary.append(renderReferenceComparison(result, ref));
+  if (result.task !== "classification") {
+    chips.push({ label: "Time", value: formatTime(result.timeMs) });
+    summary.append(createStatGrid(chips));
+  }
   if (result.task === "classification" && sm.certification === "unavailable") {
     summary.append(note(`Certification was not available for this model (${sm.certificationNote}), so only the attack ran: the robust accuracy is an upper bound.`));
   }
@@ -689,46 +716,63 @@ function renderPointsResult(ctx, result) {
   return group;
 }
 
-function renderReferenceComparison(result, ref) {
-  const n = result.rows.length;
-  const robust = ref.verdicts.filter((v) => v === "unsat").length;
-  const notRobust = ref.verdicts.filter((v) => v === "sat").length;
-  const undecided = n - robust - notRobust;
-  const status = (i) => result.rows[i].status;
-  const count = (fn) => result.rows.filter((_, i) => fn(i)).length;
-  const found = count((i) => status(i) === "counterexample" && ref.verdicts[i] === "sat");
-  const certifiedOk = count((i) => status(i) === "certified" && ref.verdicts[i] === "unsat");
-  const decidedUndecided = count((i) => status(i) !== "unknown" && ref.verdicts[i] === "unknown");
-  const contradictions = count(
-    (i) => (status(i) === "counterexample" && ref.verdicts[i] === "unsat") || (status(i) === "certified" && ref.verdicts[i] === "sat"),
-  );
+/**
+ * Result overview for runs with a status per point/property: a few key
+ * figures, a bar of this run's certified / counterexample / unknown split and,
+ * for benchmarks, the same bar for the published verdicts.
+ */
+function renderStatusOverview(result, { rangeLabel, safe, unsafe, extraChips = [] }) {
+  const rows = result.rows;
+  const n = rows.length;
   const pct = (k) => `${((k / n) * 100).toFixed(1)}%`;
-  const certifying = result.summary.certification === "crown";
-  const box = el("div", "page-flow");
-  box.append(
-    createStatGrid([
-      {
-        label: "Published robust accuracy (exact)",
-        value: undecided ? `${pct(robust)}–${pct(robust + undecided)} (${undecided} undecided)` : `${pct(robust)} (${robust}/${n})`,
-      },
-      ...(certifying ? [{ label: "Published-robust points certified", value: `${certifiedOk} / ${robust}` }] : []),
-      { label: "Published non-robust points found", value: `${found} / ${notRobust}` },
-    ]),
-  );
-  const text = el("p", "section-note");
-  text.append(
-    "Published verdicts of complete verifiers (",
-    Object.assign(el("a", "inline-link", "source"), { href: ref.sourceUrl, target: "_blank", rel: "noopener" }),
-    ").",
-  );
-  box.append(text);
-  if (decidedUndecided) {
-    box.append(note(`The tool decided ${decidedUndecided} point(s) that no verifier solved (see the per-point table).`));
+  const count = (fn) => rows.filter(fn).length;
+  const tool = {
+    certified: count((r) => r.status === "certified"),
+    counterexample: count((r) => r.status === "counterexample"),
+    unknown: count((r) => r.status === "unknown"),
+  };
+  const lo = tool.certified;
+  const hi = n - tool.counterexample;
+  const ref = result.meta.reference;
+
+  const chips = [{ label: rangeLabel, value: lo === hi ? pct(hi) : `${pct(lo)} – ${pct(hi)}`, title: `Lower end: ${safe} (certified). Upper end: no counterexample found.` }];
+  const bars = [{ label: "This tool", values: tool }];
+  const out = [];
+  if (ref) {
+    const pub = { certified: 0, counterexample: 0, unknown: 0 };
+    ref.verdicts.forEach((v) => pub[{ unsat: "certified", sat: "counterexample", unknown: "unknown" }[v]]++);
+    chips.push({
+      label: "Published",
+      value: pub.unknown ? `${pct(pub.certified)} – ${pct(pub.certified + pub.unknown)}` : pct(pub.certified),
+      title: "From the verdicts of the competition's complete verifiers",
+    });
+    bars.push({ label: "Published", values: pub });
   }
-  if (contradictions) {
-    box.append(errorText(`${contradictions} result(s) contradict a published verdict. Please report this: it indicates a bug or a mismatch in the input box.`));
+  chips.push(...extraChips, { label: "Time", value: formatTime(result.timeMs) });
+  out.push(
+    createStatGrid(chips),
+    createSplitBars({
+      parts: [
+        { key: "certified", label: `Certified ${safe}` },
+        { key: "counterexample", label: `Counterexample (${unsafe})` },
+        { key: "unknown", label: "Unknown" },
+      ],
+      rows: bars,
+    }),
+  );
+
+  if (ref) {
+    const contradictions = count(
+      (r, i) => (r.status === "counterexample" && ref.verdicts[i] === "unsat") || (r.status === "certified" && ref.verdicts[i] === "sat"),
+    );
+    const decidedUndecided = count((r, i) => r.status !== "unknown" && ref.verdicts[i] === "unknown");
+    const source = el("p", "section-note");
+    source.append("Published: verdicts of the competition's complete verifiers (", Object.assign(el("a", "inline-link", "source"), { href: ref.sourceUrl, target: "_blank", rel: "noopener" }), ").");
+    out.push(source);
+    if (decidedUndecided) out.push(note(`The tool decided ${decidedUndecided} case(s) that no verifier solved.`));
+    if (contradictions) out.push(errorText(`${contradictions} result(s) contradict a published verdict. Please report this: it indicates a bug or a mismatch in the input box.`));
   }
-  return box;
+  return out;
 }
 
 function pointColumns(result) {
@@ -845,7 +889,7 @@ export function renderCheckPage(ctx) {
 
   const result = s.run.status === "done" ? s.run.result : null;
   if (result) {
-    results.append(result.mode === "vnnlib" ? renderVnnlibResult(ctx, result) : renderPointsResult(ctx, result));
+    results.append(result.mode === "properties" ? renderPropertiesResult(ctx, result) : renderPointsResult(ctx, result));
   } else {
     const intro = el("div", "panel");
     intro.append(

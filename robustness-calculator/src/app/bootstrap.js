@@ -25,13 +25,13 @@ const state = createAppState({
   },
   attack: {
     seed: 0,
-    restarts: 10,
-    steps: 50,
+    restarts: 400,
+    steps: 200,
     alpha: "",
     schedule: "apgd",
     certify: true,
     backend: "webgl",
-    selfTestSamples: 20,
+    selfTestSamples: 100,
   },
   run: { status: "idle", result: null, error: null, progress: null },
 });

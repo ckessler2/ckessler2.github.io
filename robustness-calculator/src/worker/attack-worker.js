@@ -8,8 +8,8 @@ import { translateModel } from "../onnx/translate.js";
 import { createOrtChecker } from "../check/ort-check.js";
 import { parseVnnlib } from "../spec/vnnlib.js";
 import { parsePointsCsv, parseBoundList } from "../spec/points.js";
-import { runVnnlibCheck } from "../attack/run-vnnlib.js";
 import { runPointsCheck } from "../attack/run-points.js";
+import { runPropertySet } from "../attack/run-properties.js";
 import { buildReluChain } from "../bounds/crown.js";
 
 let tf = null;
@@ -25,6 +25,7 @@ async function loadLibraries() {
   [tf, ort] = await Promise.all([import(TFJS_URL), import(ORT_URL)]);
   ort.env.wasm.wasmPaths = ORT_WASM_BASE;
   ort.env.wasm.numThreads = 1; // GitHub Pages is not cross-origin isolated
+  ort.env.logLevel = "error"; // e.g. "initializer appears in graph inputs" warnings
   await tf.setBackend("cpu");
   await tf.ready();
 }
@@ -97,9 +98,9 @@ async function handle(msg, reply) {
     reply({ type: "progress", progress: p });
   };
 
-  if (msg.type === "run-vnnlib") {
-    const spec = parseVnnlib(msg.text);
-    return runVnnlibCheck({ tf, model, checker, spec, settings: runSettings, onProgress });
+  if (msg.type === "run-properties") {
+    const properties = msg.files.map((f) => ({ name: f.name, spec: parseVnnlib(f.text) }));
+    return runPropertySet({ tf, model, checker, chain, chainError, properties, settings: runSettings, onProgress });
   }
 
   if (msg.type === "run-points") {

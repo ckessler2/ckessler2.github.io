@@ -11,7 +11,7 @@
 // conjunction of atoms) holds when every atom holds; the region is violated
 // when any disjunct holds for some input in [lo, hi].
 
-const MAX_CONJUNCTIONS = 100000;
+const MAX_CONJUNCTIONS = 1000000;
 
 function tokenize(text) {
   const tokens = [];

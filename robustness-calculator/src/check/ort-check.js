@@ -12,7 +12,7 @@ function ortError(err, what) {
 export async function createOrtChecker(ort, bytes, model) {
   let session;
   try {
-    session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"] });
+    session = await ort.InferenceSession.create(bytes, { executionProviders: ["wasm"], logSeverityLevel: 3 });
   } catch (err) {
     throw ortError(err, "load the model");
   }

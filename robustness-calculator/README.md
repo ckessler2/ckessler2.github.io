@@ -1,14 +1,16 @@
 # ε-Ball Robustness Estimator
 
-*Certified and attack bounds for neural network classifiers, in your browser.*
+*Certified and attack bounds for neural networks, in your browser.*
 
-A static, client-side tool that checks ε-ball robustness of ONNX classifiers.
-For each point it either **certifies** robustness with CROWN (a bound
-propagation method), finds a **counterexample** with a gradient attack (PGD
-with the APGD step schedule), or reports **unknown**. Robust accuracy is
-reported as a range: certified share ≤ exact value ≤ share without a
-counterexample. On every published VNN-COMP benchmark tried, the range
-contains the published result, and on some it matches exactly. Nothing is
+A static, client-side tool that checks the robustness of ONNX networks: ε-ball
+robustness of classifiers, and published-style regression properties (an
+input box and an unsafe condition on the outputs). For each point or property
+it either **certifies** it with CROWN (a bound propagation method), finds a
+**counterexample** with a gradient attack (PGD with the APGD step schedule),
+or reports **unknown**. Results are reported as a range: certified share ≤
+exact value ≤ share without a counterexample. On every published VNN-COMP
+benchmark tried (35 settings), the range contains the published result, and
+in 22 it matches exactly. Nothing is
 uploaded and nothing needs installing. The
 original plan is in `robustness_checker_brief.md`; the page's **Method** tab
 documents the method in full.
@@ -19,10 +21,12 @@ Only a complete verifier decides every point.
 
 ## Using it
 
-1. Choose a model (`.onnx`) and a CSV of points (one row per point: the
-   input features, then the class label). Alternatively, pick a built-in
-   benchmark and press **Load benchmark**.
-2. Set ε (the L∞ radius) and press **Run**.
+1. Choose the robustness type.
+2. Pick a built-in benchmark and press **Load benchmark**, or choose your own
+   model (`.onnx`) and either a CSV of points (classification: one row per
+   point, the input features, then the class label) or one or more VNNLIB
+   property files (regression: output constraints).
+3. For points, set ε (the L∞ radius). Press **Run**.
 
 ε is in the model's own input units, so if the model expects normalised
 inputs, ε is normalised too.
@@ -32,21 +36,33 @@ inputs, ε is normalised too.
 - the certification switch;
 - the per-point ε range (certified up to / broken from);
 - input clipping (for example [0, 1] for images);
-- seed, restarts R (default 10), steps K (default 50), step schedule and
+- seed, restarts R (default 400), steps K (default 200), self-test samples
+  (default 100), step schedule and
   tf.js backend (WebGL by default; CPU for bit-for-bit reproducible attacks);
-- the untested VNNLIB mode.
+- (input splitting for regression properties with at most 4 varying inputs is
+  automatic).
 
 ## Built-in benchmarks
 
-Published VNN-COMP ε-ball classification instances (15 benchmarks, 18 settings), fetched on demand from the competition
-repositories (pinned commits) and shown next to their published verdicts.
-None of the files are hosted here.
+Published VNN-COMP instances (32 benchmarks, 35 settings), fetched on demand
+from the competition repositories (pinned commits) and shown next to their
+published verdicts. None of the files are hosted here.
+
+Classification (ε-balls around images):
 
 | Benchmark | Network | Points | ε |
 |---|---|---|---|
 | VNN-COMP 2022 `mnist_fc` | 784 → 6, 4 or 2 × 256 ReLU → 10 | 15 MNIST images | 0.03, 0.05 |
 | VNN-COMP 2025 `cora_2024` | 7 × 250 ReLU (models `set`, `point`, `trades`) for MNIST, SVHN, CIFAR-10 | 20 images each | 0.1 (MNIST, SVHN), 2/255 (CIFAR-10) |
 | VNN-COMP 2025 `malbeware` | linear, 64 × 64 → 25 malware families | 14–19 images per ε | 1/255, 2/255, 3/255 |
+
+Regression (input box ⇒ output conditions, as VNNLIB properties):
+
+| Benchmark | Network | Properties |
+|---|---|---|
+| VNN-COMP 2025 `collins_rul_cnn_2022` | 3 CNNs predicting remaining useful life; 2–16 perturbed readings | 48, as 12 settings of 4 |
+| VNN-COMP 2025 `nn4sys` learned index | 2 fully connected networks (key → position) | 12 (the 6 properties per network with ≤ 1,000 key ranges) |
+| VNN-COMP 2022 `reach_prob_density` | fully connected dynamics models (gcas, robot, vdp) | 36 |
 
 **Where the images come from:** they are recovered from the property files.
 Each box is clip(x ± ε, 0, 1). The 2022 pixels are snapped to k/255; the 2025
@@ -69,12 +85,13 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 
 | Check | Result |
 |---|---|
-| Unit tests (`npm test`) | 30/30 pass |
-| Built-in benchmarks, default settings: 320 points in 18 network/ε settings (`node tests/benchmarks/crown.js`) | 0 contradictions with published verdicts. Certified 98/142 published-robust points; counterexamples for 145/150 published-non-robust points. The tool's range contains the published robust accuracy in all 18 settings, and equals the published value or range in 10 of them. |
+| Unit tests (`npm test`) | 31/31 pass |
+| Classification benchmarks, default settings: 320 images in 18 settings (`node tests/benchmarks/crown.js --tasks=classification`) | 0 contradictions with published verdicts. Certified 99/142 published-robust images; counterexamples for 145/150 published-non-robust images. The range contains the published robust accuracy in all 18 settings and equals it (or the published range) in 10. |
+| Regression benchmarks, default settings: 96 properties in 17 settings (`node tests/benchmarks/crown.js --tasks=properties`) | 0 contradictions. Certified 45/64 published-safe properties; counterexamples for 26/32 published-unsafe ones. The range contains the published value in all 17 settings and equals it in 12. |
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
-| Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks. The CROWN layer chain matches onnxruntime on the benchmark networks and ACAS Xu. |
+| Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks and 6·10⁻⁶ on the Collins CNNs. The CROWN layer chain matches onnxruntime on the benchmark networks (including convolutions) and ACAS Xu. |
 
-The per-benchmark table is on the page's **Results** tab (`src/pages/results-page.js`).
+The per-benchmark tables are on the page's **Results** tab (`src/pages/results-page.js`).
 
 Further scripts in `tests/benchmarks/`:
 
@@ -110,10 +127,11 @@ node tests/benchmarks/crown.js     # validation on all built-in benchmarks
 ```
 src/
   onnx/      protobuf reader, ONNX model decoder, graph -> tf.js translator
-  bounds/    crown.js (layer-chain extraction and CROWN bounds)
+  bounds/    crown.js (layer chain incl. convolutions; interval and CROWN bounds)
   attack/    pgd.js (PGD / APGD schedule), objectives.js, box.js, rng.js,
-             run-points.js (certify, then attack), run-vnnlib.js
-  spec/      points.js (CSV mode), vnnlib.js (VNNLIB mode), benchmark.js (built-in benchmarks)
+             run-points.js (points: certify, then attack),
+             run-properties.js (properties: certify, split, then attack), run-vnnlib.js
+  spec/      points.js (CSV mode), vnnlib.js (VNNLIB properties), benchmark.js (built-in benchmarks)
   check/     ort-check.js (onnxruntime-web forward pass + self-test)
   worker/    attack-worker.js (owns tf, ort, the model and its layer chain)
   app/, components/, pages/   UI (same structure and styles as ../plate-model)
@@ -126,19 +144,25 @@ tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
 The tool is designed to be fast rather than complete. The Results tab ("Where
 the gaps come from") explains the two gaps in detail.
 
-- **Certification is incomplete.** There is no branch and bound or α-CROWN,
-  so it certifies little at larger ε or on networks not trained for
-  verification. For example, on the 6×256 network at ε = 0.05 it certifies 0
+- **Certification is incomplete.** There is no branch and bound over ReLUs or
+  α-CROWN (input splitting is used only for properties with ≤ 4 varying
+  inputs), so it certifies little at larger ε, on networks not trained for
+  verification, or on large regression boxes (reach_prob gcas and robot). For example, on the 6×256 network at ε = 0.05 it certifies 0
   of 12 published-robust images: roughly 750–1,300 of the 1,536 ReLUs are
   unstable, and the margin bounds fall to between −300 and −16,000. No setting
   changes this.
 - **Float32 is handled with a margin, not a proof.** Bounds are computed in
-  float64 for the real-valued network; certification requires a margin bound
-  above 10⁻³ to absorb float32 rounding, which is not a formal float32 proof.
-- **The attack misses some counterexamples:** 5 of 150 published ones. The one
+  float64 for the real-valued network; a bound must clear its threshold by the
+  larger of 10⁻⁵ × max(1, |threshold|) and 10× the float32 disagreement the
+  run's self-test measures. This is not a formal float32 proof.
+- **The attack misses some counterexamples:** 5 of 150 published ones in
+  classification and 6 of 32 in regression (several in very thin unsafe
+  regions). The classification one
   analysed (6×256, prop_1, ε = 0.05) sits beyond a region where the margin
   first rises, so the gradient points away from it. More restarts or steps,
   targeted attacks and random sampling do not find it; a gradient-free Square
   Attack found it once but not reliably.
-- **Scope:** fully connected ReLU networks for certification; L∞ only; CPU
-  JavaScript (a benchmark run takes seconds to about a minute).
+- **Scope:** ReLU networks built from dense and 2-D convolution layers for
+  certification (no pooling or residual connections); L∞ only; the six
+  largest learned-index properties are excluded as too large; a benchmark run
+  takes seconds to about two minutes.

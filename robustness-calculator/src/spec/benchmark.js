@@ -26,6 +26,7 @@ function mnistFc(layersLabel, net, codes003, codes005) {
   return {
     id: `mnist_fc-${net}`,
     task: "classification",
+    kind: "points",
     label: `VNN-COMP 2022 mnist_fc: ${layersLabel} ReLU network`,
     modelName: `mnist-net_${net}.onnx`,
     modelUrl: `${VNN2022}/onnx/mnist-net_${net}.onnx.gz`,
@@ -57,6 +58,7 @@ function cora(dataset, kind, codes) {
   return {
     id: `cora-${dataset}-${kind}`,
     task: "classification",
+    kind: "points",
     label: `VNN-COMP 2025 CORA: ${d.name} 7×250 ReLU, ${CORA_MODELS[kind]}`,
     modelName: `${dataset}-${kind}.onnx`,
     modelUrl: `${VNN2025}/onnx/${dataset}-${kind}.onnx.gz`,
@@ -80,6 +82,7 @@ function malbeware(k, files, codes) {
   return {
     id: `malbeware-linear-eps${k}`,
     task: "classification",
+    kind: "points",
     label: `VNN-COMP 2025 MalBeWare: linear 64×64 → 25 classes, ε = ${k}/255`,
     modelName: "malware_malimg_family_scaled_linear-25.onnx",
     modelUrl: `${VNN2025_MAL}/onnx/malware_malimg_family_scaled_linear-25.onnx.gz`,
@@ -94,6 +97,81 @@ function malbeware(k, files, codes) {
       verdicts: { [eps]: decode(codes) },
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Regression: published properties "input box ⇒ outputs stay in a safe set".
+// Each benchmark is one network and a list of VNNLIB property files; the
+// verdict per file is the published one (unsat = proven safe, sat = a
+// counterexample exists).
+
+const VNN2025_ROOT = VNN2025.replace("/cora_2024", "");
+const VNN2022_ROOT = VNN2022.replace("/mnist_fc", "");
+
+function propertyBenchmark({ id, label, modelName, modelUrl, base, names, codes, source, sourceUrl }) {
+  return {
+    id,
+    task: "properties",
+    kind: "properties",
+    label,
+    modelName,
+    modelUrl,
+    propertyUrls: names.map((n) => `${base}/${n}.vnnlib.gz`),
+    imageNames: names,
+    reference: { source, sourceUrl, verdicts: { all: decode(codes) } },
+  };
+}
+
+// Collins Aerospace remaining-useful-life CNN: unsafe if the predicted RUL
+// leaves an interval around the true RUL while k of the input sensor values
+// are perturbed. Grouped by network and number of perturbed values.
+function collins(net, description, k, names, codes) {
+  return propertyBenchmark({
+    id: `collins-${net}-p${k}`,
+    label: `Collins RUL CNN (${description}): ${k} perturbed inputs`,
+    modelName: `${net}.onnx`,
+    modelUrl: `${VNN2025_ROOT}/collins_rul_cnn_2022/onnx/${net}.onnx.gz`,
+    base: `${VNN2025_ROOT}/collins_rul_cnn_2022/vnnlib`,
+    names,
+    codes,
+    source: "VNN-COMP 2025 collins_rul_cnn_2022: published verdicts of the complete verifiers",
+    sourceUrl: "https://github.com/VNN-COMP/vnncomp2025_results",
+  });
+}
+
+// nn4sys learned index: for keys in a small range the predicted position must
+// stay within given bounds. Only the six properties with up to 1,000 key
+// ranges are included; the other six (3,000–60,000 ranges, up to 12 MB of
+// VNNLIB each) are too large for a quick in-browser check.
+function lindex(net, names, codes) {
+  return propertyBenchmark({
+    id: `nn4sys-${net}`,
+    label: `nn4sys learned index (${net === "lindex" ? "4 layers" : "deep"})`,
+    modelName: `${net}.onnx`,
+    modelUrl: `${VNN2025_ROOT}/nn4sys/onnx/${net}.onnx.gz`,
+    base: `${VNN2025_ROOT}/nn4sys/vnnlib`,
+    names,
+    codes,
+    source: "VNN-COMP 2025 nn4sys: published verdicts of the complete verifiers",
+    sourceUrl: "https://github.com/VNN-COMP/vnncomp2025_results",
+  });
+}
+
+// Reachability of learned dynamics models: for a box of initial states the
+// predicted state must avoid an unsafe set.
+function reachProb(net, names, codes) {
+  const what = { gcas: "ground-collision avoidance (14 states)", robot: "robot (5 states)", vdp: "Van der Pol oscillator (3 states)" }[net];
+  return propertyBenchmark({
+    id: `reach_prob-${net}`,
+    label: `VNN-COMP 2022 reach_prob_density: ${what}`,
+    modelName: `${net}.onnx`,
+    modelUrl: `${VNN2022_ROOT}/reach_prob_density/onnx/${net}.onnx.gz`,
+    base: `${VNN2022_ROOT}/reach_prob_density/vnnlib`,
+    names,
+    codes,
+    source: "VNN-COMP 2022 reach_prob_density: published verdicts of the complete verifiers",
+    sourceUrl: "https://github.com/VNN-COMP/vnncomp2022_results",
+  });
 }
 
 export const BENCHMARKS = [
@@ -129,6 +207,23 @@ export const BENCHMARKS = [
     "Agent.FYI_label-1_eps-3_idx-8", "Allaple.A_label-2_eps-3_idx-12", "Malex.gen!J_label-16_eps-3_idx-82", "Allaple.L_label-3_eps-3_idx-16",
     "VB.AT_label-22_eps-3_idx-111",
   ], "uuuuuuuuuusuuuuuu"),
+  collins("NN_rul_small_window_20", "small, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
+  collins("NN_rul_small_window_20", "small, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
+  collins("NN_rul_small_window_20", "small, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
+  collins("NN_rul_small_window_20", "small, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
+  collins("NN_rul_full_window_20", "full, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
+  collins("NN_rul_full_window_20", "full, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
+  collins("NN_rul_full_window_20", "full, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
+  collins("NN_rul_full_window_20", "full, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
+  collins("NN_rul_full_window_40", "full, window 40", 2, ["robustness_2perturbations_delta5_epsilon10_w40", "robustness_2perturbations_delta10_epsilon10_w40", "robustness_2perturbations_delta20_epsilon10_w40", "robustness_2perturbations_delta40_epsilon10_w40"], "uuuu"),
+  collins("NN_rul_full_window_40", "full, window 40", 4, ["robustness_4perturbations_delta5_epsilon10_w40", "robustness_4perturbations_delta10_epsilon10_w40", "robustness_4perturbations_delta20_epsilon10_w40", "robustness_4perturbations_delta40_epsilon10_w40"], "ssus"),
+  collins("NN_rul_full_window_40", "full, window 40", 8, ["robustness_8perturbations_delta5_epsilon10_w40", "robustness_8perturbations_delta10_epsilon10_w40", "robustness_8perturbations_delta20_epsilon10_w40", "robustness_8perturbations_delta40_epsilon10_w40"], "uuus"),
+  collins("NN_rul_full_window_40", "full, window 40", 16, ["robustness_16perturbations_delta5_epsilon10_w40", "robustness_16perturbations_delta10_epsilon10_w40", "robustness_16perturbations_delta20_epsilon10_w40", "robustness_16perturbations_delta40_epsilon10_w40"], "uuuu"),
+  lindex("lindex", ["lindex_1", "lindex_200", "lindex_400", "lindex_600", "lindex_800", "lindex_1000"], "uuuuuu"),
+  lindex("lindex_deep", ["lindex_1", "lindex_200", "lindex_400", "lindex_600", "lindex_800", "lindex_1000"], "uuuuuu"),
+  reachProb("gcas", ["gcas_0", "gcas_1", "gcas_2", "gcas_3", "gcas_4", "gcas_5", "gcas_6", "gcas_7", "gcas_8", "gcas_9", "gcas_10", "gcas_11"], "ussuuusuusuu"),
+  reachProb("robot", ["robot_0", "robot_1", "robot_2", "robot_3", "robot_4", "robot_5", "robot_6", "robot_7", "robot_8", "robot_9", "robot_10", "robot_11"], "sssusuuuusss"),
+  reachProb("vdp", ["vdp_0", "vdp_1", "vdp_2", "vdp_3", "vdp_4", "vdp_5", "vdp_6", "vdp_7", "vdp_8", "vdp_9", "vdp_10", "vdp_11"], "uuusuususuuu"),
 ];
 
 /**

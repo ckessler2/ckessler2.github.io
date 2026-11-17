@@ -87,7 +87,7 @@ export function createRouter(root, state, worker) {
 
     const subtitle = document.createElement("p");
     subtitle.className = "site-subtitle";
-    subtitle.textContent = "Certified and attack bounds for neural network classifiers, in your browser";
+    subtitle.textContent = "Certified and attack bounds for neural networks, in your browser";
 
     header.append(headerTop, titleRow, subtitle, renderNav(routes, activeRoute));
 

@@ -3,23 +3,13 @@ import { createStatGrid } from "../components/stats.js";
 import { createSplitBars } from "../components/split-bars.js";
 import { BENCHMARKS } from "../spec/benchmark.js";
 
-export function renderResultsPage() {
-  const card = el("article", "page-card prose");
-
-  // Published verdict counts over the same images, from src/spec/benchmark.js.
-  const PUBLISHED_TOTALS = { certified: 0, counterexample: 0, unknown: 0 };
-  for (const b of BENCHMARKS) {
-    for (const verdicts of Object.values(b.reference.verdicts)) {
-      for (const v of verdicts) PUBLISHED_TOTALS[{ unsat: "certified", sat: "counterexample", unknown: "unknown" }[v]]++;
-    }
-  }
-
-  // Results of tests/benchmarks/crown.js at the default settings
-  // (R = 10, K = 50, APGD, seed 0, CPU backend).
-  const results = [
+// Results of tests/benchmarks/crown.js at the default settings
+// (R = 10, K = 50, APGD, seed 0, CPU backend). Each row:
+// [benchmark, setting, instances, certified, counterexamples, unknown, tool's range, published].
+const CLASSIFICATION = [
     ["2022 mnist_fc, 6×256", "0.03", 15, 9, 1, 5, "60.0–93.3%", "93.3%"],
     ["2022 mnist_fc, 6×256", "0.05", 15, 0, 1, 14, "0.0–93.3%", "80.0–86.7%"],
-    ["2022 mnist_fc, 4×256", "0.03", 15, 10, 1, 4, "66.7–93.3%", "93.3%"],
+    ["2022 mnist_fc, 4×256", "0.03", 15, 11, 1, 3, "73.3–93.3%", "93.3%"],
     ["2022 mnist_fc, 4×256", "0.05", 15, 0, 3, 12, "0.0–80.0%", "80.0%"],
     ["2022 mnist_fc, 2×256", "0.03", 15, 9, 2, 4, "60.0–86.7%", "80.0%"],
     ["2022 mnist_fc, 2×256", "0.05", 15, 1, 7, 7, "6.7–53.3%", "46.7%"],
@@ -35,15 +25,54 @@ export function renderResultsPage() {
     ["2025 MalBeWare, linear", "1/255", 14, 14, 0, 0, "100.0%", "100.0%"],
     ["2025 MalBeWare, linear", "2/255", 19, 19, 0, 0, "100.0%", "100.0%"],
     ["2025 MalBeWare, linear", "3/255", 17, 16, 1, 0, "94.1%", "94.1%"],
-  ];
-  const head = ["Benchmark", "ε", "Images", "Certified", "Counterexample", "Unknown", "Tool’s range", "Published"];
+];
+
+const REGRESSION = [
+    ["2025 Collins RUL, small, window 20", "2 perturbed", 4, 3, 1, 0, "75.0%", "75.0%"],
+    ["2025 Collins RUL, small, window 20", "4 perturbed", 4, 0, 4, 0, "0.0%", "0.0%"],
+    ["2025 Collins RUL, small, window 20", "8 perturbed", 4, 4, 0, 0, "100.0%", "100.0%"],
+    ["2025 Collins RUL, small, window 20", "16 perturbed", 4, 2, 2, 0, "50.0%", "50.0%"],
+    ["2025 Collins RUL, full, window 20", "2 perturbed", 4, 3, 1, 0, "75.0%", "75.0%"],
+    ["2025 Collins RUL, full, window 20", "4 perturbed", 4, 0, 4, 0, "0.0%", "0.0%"],
+    ["2025 Collins RUL, full, window 20", "8 perturbed", 4, 4, 0, 0, "100.0%", "100.0%"],
+    ["2025 Collins RUL, full, window 20", "16 perturbed", 4, 2, 2, 0, "50.0%", "50.0%"],
+    ["2025 Collins RUL, full, window 40", "2 perturbed", 4, 4, 0, 0, "100.0%", "100.0%"],
+    ["2025 Collins RUL, full, window 40", "4 perturbed", 4, 1, 3, 0, "25.0%", "25.0%"],
+    ["2025 Collins RUL, full, window 40", "8 perturbed", 4, 1, 1, 2, "25.0–75.0%", "75.0%"],
+    ["2025 Collins RUL, full, window 40", "16 perturbed", 4, 0, 0, 4, "0.0–100.0%", "100.0%"],
+    ["2025 nn4sys learned index", "4 layers", 6, 6, 0, 0, "100.0%", "100.0%"],
+    ["2025 nn4sys learned index", "deep", 6, 6, 0, 0, "100.0%", "100.0%"],
+    ["2022 reach_prob_density", "ground-collision avoidance", 12, 0, 4, 8, "0.0–66.7%", "66.7%"],
+    ["2022 reach_prob_density", "robot", 12, 0, 3, 9, "0.0–75.0%", "41.7%"],
+    ["2022 reach_prob_density", "Van der Pol", 12, 9, 1, 2, "75.0–91.7%", "75.0%"],
+];
+
+/** Published verdict counts for one task, from src/spec/benchmark.js. */
+function publishedTotals(task) {
+  const totals = { certified: 0, counterexample: 0, unknown: 0 };
+  for (const b of BENCHMARKS.filter((bm) => bm.task === task)) {
+    for (const verdicts of Object.values(b.reference.verdicts)) {
+      for (const v of verdicts) totals[{ unsat: "certified", sat: "counterexample", unknown: "unknown" }[v]]++;
+    }
+  }
+  return totals;
+}
+
+/** Key figures, the tool-vs-published bars and the per-setting table for one task. */
+function benchmarkSection({ title, intro, rows, task, words, notes }) {
+  const sum = (i) => rows.reduce((a, r) => a + r[i], 0);
+  const n = sum(2);
+  const tool = { certified: sum(3), counterexample: sum(4), unknown: sum(5) };
+  const published = publishedTotals(task);
+  const exact = rows.filter((r) => r[6] === r[7]).length;
+
   const table = el("table", "data-table");
-  const thead = el("thead");
   const hr = el("tr");
-  head.forEach((h) => hr.append(el("th", "", h)));
+  ["Benchmark", words.setting, words.units, "Certified", "Counterexample", "Unknown", "Tool’s range", "Published"].forEach((h) => hr.append(el("th", "", h)));
+  const thead = el("thead");
   thead.append(hr);
   const tbody = el("tbody");
-  for (const row of results) {
+  for (const row of rows) {
     const tr = el("tr");
     row.forEach((v) => tr.append(el("td", "", String(v))));
     tbody.append(tr);
@@ -52,46 +81,63 @@ export function renderResultsPage() {
   const wrap = el("div", "table-wrap results-table");
   wrap.append(table);
 
-  // Totals over all settings, computed from the table rows.
-  const sum = (i) => results.reduce((a, r) => a + r[i], 0);
-  const images = sum(2);
-  const tool = { certified: sum(3), counterexample: sum(4), unknown: sum(5) };
-  const published = PUBLISHED_TOTALS;
-  const exact = results.filter((r) => r[6] === r[7]).length;
-
-  card.append(
-    el("h2", "", "Classification benchmarks"),
-    para(
-      `ε-ball classification on ${results.length} published VNN-COMP settings (${images} images), at the default settings, against the verdicts of the competitions' complete verifiers.`,
-    ),
+  return [
+    el("h2", "", title),
+    para(intro(rows.length, n)),
     createStatGrid([
-      { label: "Contradictions with published verdicts", value: `0 of ${images} images` },
-      { label: "Tool's range contains the published result", value: `${results.length} of ${results.length} settings` },
-      { label: "Exact, or exactly the published range", value: `${exact} of ${results.length} settings` },
+      { label: "Contradictions with published verdicts", value: `0 of ${n} ${words.units.toLowerCase()}` },
+      { label: "Tool's range contains the published result", value: `${rows.length} of ${rows.length} settings` },
+      { label: "Exact, or exactly the published range", value: `${exact} of ${rows.length} settings` },
       {
         label: "Published answers recovered",
-        value: `${tool.certified}/${published.certified} robust · ${tool.counterexample}/${published.counterexample} not robust`,
+        value: `${tool.certified}/${published.certified} ${words.safe} · ${tool.counterexample}/${published.counterexample} ${words.unsafe}`,
       },
     ]),
     createSplitBars({
       parts: [
-        { key: "certified", label: "Certified robust" },
-        { key: "counterexample", label: "Counterexample (not robust)" },
+        { key: "certified", label: `Certified ${words.safe}` },
+        { key: "counterexample", label: `Counterexample (${words.unsafe})` },
         { key: "unknown", label: "Unknown" },
       ],
       rows: [
         { label: "This tool", values: tool },
         { label: "Published verifiers", values: published },
       ],
-      caption:
-        "The same images, decided by this tool and by the competitions' complete verifiers (published: proven robust, counterexample, or undecided). The tool leaves more images unknown, but every image it decides agrees with the published verdict.",
+      caption: `The same ${words.units.toLowerCase()}, decided by this tool and by the competitions' complete verifiers (published: proven ${words.safe}, counterexample, or undecided). The tool leaves more unknown, but everything it decides agrees with the published verdict.`,
     }),
     wrap,
-    list([
-      "Useful: in 10 of the 18 settings the tool gives the exact answer or exactly the published range, in seconds to a minute. This includes the linear MalBeWare classifier (CROWN is exact for a linear model), the set-trained CORA MNIST network, and the CORA SVHN networks, where every image has a counterexample. Overall it certifies 98 of the 142 published-robust images and finds counterexamples for 145 of the 150 published-non-robust ones.",
-      "Limited: at ε = 0.05 on the standard-trained 2022 networks, CROWN certifies almost nothing, so the range is wide (for example 0.0–93.3%). The attack misses 5 published counterexamples (for example 2 on CORA CIFAR-10 trades, whose range therefore reaches 30% against at most 20% published). None of the 28 images that no verifier decided is decided by the tool either.",
-      "The page runs the attack with WebGL by default, which can find slightly different counterexamples than the CPU run behind this table; certification is unaffected.",
-    ]),
+    list(notes),
+  ];
+}
+
+export function renderResultsPage() {
+  const card = el("article", "page-card prose");
+
+  card.append(
+    ...benchmarkSection({
+      title: "Classification benchmarks",
+      intro: (k, n) => `ε-ball classification on ${k} published VNN-COMP settings (${n} images), at the default settings, against the verdicts of the competitions' complete verifiers.`,
+      rows: CLASSIFICATION,
+      task: "classification",
+      words: { setting: "ε", units: "Images", safe: "robust", unsafe: "not robust" },
+      notes: [
+        "Useful: in 10 of the 18 settings the tool gives the exact answer or exactly the published range, in seconds to a minute. This includes the linear MalBeWare classifier (CROWN is exact for a linear model), the set-trained CORA MNIST network, and the CORA SVHN networks, where every image has a counterexample. Overall it certifies 99 of the 142 published-robust images and finds counterexamples for 145 of the 150 published-non-robust ones.",
+        "Limited: at ε = 0.05 on the standard-trained 2022 networks, CROWN certifies almost nothing, so the range is wide (for example 0.0–93.3%). The attack misses 5 published counterexamples (for example 2 on CORA CIFAR-10 trades, whose range therefore reaches 30% against at most 20% published). None of the 28 images that no verifier decided is decided by the tool either.",
+        "The page runs the attack with WebGL by default, which can find slightly different counterexamples than the CPU run behind this table; certification is unaffected.",
+      ],
+    }),
+    ...benchmarkSection({
+      title: "Regression benchmarks",
+      intro: (k, n) => `Published regression properties (an input box and an unsafe condition on the outputs) in ${k} settings (${n} properties), at the default settings, against the verdicts of the competitions' complete verifiers.`,
+      rows: REGRESSION,
+      task: "properties",
+      words: { setting: "Setting", units: "Properties", safe: "safe", unsafe: "unsafe" },
+      notes: [
+        "Useful: in 12 of the 17 settings the tool gives the exact answer. The convolutional Collins RUL networks are decided completely in 10 of their 12 settings, in seconds to a minute; every learned-index property is certified; and input splitting certifies 9 of the 12 Van der Pol properties, whose inputs are only three-dimensional.",
+        "Limited: the reach_prob_density properties have large input boxes. For ground-collision avoidance (14 inputs) and the robot (5 inputs), CROWN certifies nothing and there are too many inputs for splitting, although the attack finds all 4 and 3 of the 7 published counterexamples. Two Van der Pol counterexamples sit in very thin unsafe regions and are missed. On the larger Collins network (window 40) with 8–16 perturbed readings, the wide convolution layers use interval bounds and several properties stay unknown.",
+        "The six largest learned-index properties (3,000–60,000 key ranges each) are left out as too large for a quick in-browser check.",
+      ],
+    }),
   );
 
   card.append(
@@ -109,7 +155,7 @@ export function renderResultsPage() {
     list([
       "Small 2-input network with exact ground truth (branch and bound): the attack finds every non-robust point, the breaking ε is never below the exact value and at most 0.7% above it, and CROWN certifies 134 of 142 robust (point, ε) pairs and never a non-robust one.",
       "Translation: it agrees with onnxruntime-web to within 2·10⁻⁵ relative on all 45 ACAS Xu networks, and the merged layer chain matches onnxruntime on the benchmark networks and on ACAS Xu.",
-      "All checks can be rerun with the scripts in tests/benchmarks/ (crown.js for the table above) and npm test.",
+      "All checks can be rerun with the scripts in tests/benchmarks/ (crown.js for both tables above) and npm test.",
     ]),
   );
 

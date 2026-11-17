@@ -29,36 +29,42 @@ export function renderMethodPage({ renderMath }) {
       "warning-box",
       "Neither method is complete. Certification is sound but can fail to prove robust points robust; the attack can miss counterexamples. An unknown point may be either. Only a complete verifier (for example α,β-CROWN or Marabou) is guaranteed to decide every point.",
     ),
+    para(
+      "For regression, the tool checks published-style properties instead: an input box (for example a few perturbed sensor readings) and an unsafe condition on the outputs (for example, the prediction leaves a given interval). Each property is likewise certified safe, shown unsafe by a counterexample, or left unknown.",
+    ),
     para("Everything runs in your browser. Nothing is uploaded; the built-in benchmarks are downloaded from GitHub."),
     para("How well this works on published benchmarks is shown on the ", link("#/results", "Results"), " tab."),
 
     el("h2", "", "Certification (CROWN)"),
     para(
-      "The network must be a chain of affine layers separated by ReLUs. On loading, consecutive affine operators (Gemm, MatMul, and Add, Sub, Mul or Div by constants, for example input normalisation, plus Flatten, Reshape and Identity) are merged into one matrix per layer, giving",
+      "The network must be a chain of affine layers separated by ReLUs. On loading, consecutive affine operators (Gemm, MatMul, and Add, Sub, Mul or Div by constants, for example input normalisation, plus Flatten, Reshape, Identity and Dropout) are merged into one matrix per layer; 2-D convolutions are kept as convolutions rather than expanded into matrices. This gives",
     ),
     math(String.raw`z_1 = W_1 x + b_1,\qquad z_k = W_k\,\mathrm{relu}(z_{k-1}) + b_k,\qquad y = z_n .`),
     para(
-      "Networks with other activations (Sigmoid, Tanh), branches, or a multiplication between two inputs are reported as not certifiable, and only the attack runs.",
+      "Networks with other activations (Sigmoid, Tanh), pooling, branches, or a multiplication between two inputs are reported as not certifiable, and only the attack runs.",
     ),
     para(
       "CROWN (",
       link("https://arxiv.org/abs/1811.00866", "Zhang et al., 2018"),
-      ") bounds the margins y_label − y_j, for every other class j, from below over the whole ε-ball. It passes linear bounds backwards from the output to the input. A ReLU whose input interval [l, u] contains 0 is replaced by two linear bounds:",
+      ") bounds linear functions of the outputs from below over the whole input box: the margins y_label − y_j for classification, and the linear conditions of a property for regression. It passes linear bounds backwards from the output to the input. A ReLU whose input interval [l, u] contains 0 is replaced by two linear bounds:",
     ),
     math(String.raw`a\,z \;\le\; \mathrm{relu}(z) \;\le\; \frac{u\,(z - l)}{u - l},\qquad a = \begin{cases} 1 & u \ge -l \\ 0 & \text{otherwise.} \end{cases}`),
     para(
-      "The intervals [l, u] of each hidden layer come from the same backward pass applied to that layer (the first layer's are exact). The resulting bound holds for every input in the ball. A point is certified when the smallest margin bound is positive.",
+      "The intervals [l, u] of each hidden layer come from the same backward pass applied to that layer, intersected with interval arithmetic; layers wider than 1,024 units use interval arithmetic alone, which is much cheaper. The first layer's intervals are exact. The resulting bound holds for every input in the box. A point is certified when the smallest margin bound is positive; a property is certified when every unsafe case contains a condition that provably cannot hold.",
     ),
     list([
-      "There is no branch and bound (no splitting of unstable ReLUs or of the input box). CROWN is therefore incomplete: with many unstable ReLUs, typically at larger ε or in networks not trained for verifiability, the bound becomes very loose and nothing is certified.",
-      "The bounds are computed in float64 for the real-valued network. The deployed network runs in float32, so a point is only reported as certified if its margin bound exceeds 10⁻³. That is far above the float32 rounding we measured (the translated and reference networks agree to about 10⁻⁶ relative, and onnxruntime differs from an exact float64 forward pass by at most 2·10⁻⁵ relative on ACAS Xu). It is a safety margin, not a formal proof about float32 arithmetic.",
-      "Certified points are not attacked. Certification applies to classification only; the regression checks and the VNNLIB mode are attack-only.",
+      "There is no splitting of unstable ReLUs, so CROWN is incomplete: with many unstable ReLUs, typically at larger ε or in networks not trained for verifiability, the bound becomes very loose and nothing is certified.",
+      "Low-dimensional properties (at most 4 varying inputs) that CROWN does not settle are refined by splitting the input box, widest input first, into up to 10,000 pieces. Each piece is bounded again, and the centre of each unsettled piece is tested as a counterexample. The cap is on pieces, not time, so results do not depend on the machine.",
+      "The bounds are computed in float64 for the real-valued network. The deployed network runs in float32, so a bound only counts if it clears its threshold by a safety margin: the larger of 10⁻⁵ × max(1, |threshold|) and ten times the largest float32 disagreement between the translation and onnxruntime measured by the run's self-test. It is a safety margin, not a formal proof about float32 arithmetic.",
+      "Certified points and properties are not attacked. Certification applies to classification and to regression properties; the standard and Lipschitz regression checks are attack-only.",
     ]),
 
     el("h2", "", "The attack"),
     para("Points that are not certified are attacked. The attack minimises the classification margin"),
     math(String.raw`m(x) = y_{\text{label}}(x) - \max_{j \ne \text{label}} y_j(x),`),
-    para("which is negative exactly when x is misclassified, over the ε-ball (clipped to the input range, if one is given)."),
+    para(
+      "which is negative exactly when x is misclassified, over the ε-ball (clipped to the input range, if one is given). For a regression property the attack minimises min over unsafe cases of max over their conditions of (aᵢ·y − bᵢ), which is ≤ 0 exactly when the unsafe condition holds.",
+    ),
     list([
       "It takes signed-gradient steps x ← clip(x − η·(u − l)·sign(∇m(x)), l, u), where l and u are the per-feature box bounds.",
       [
@@ -68,20 +74,20 @@ export function renderMethodPage({ renderMath }) {
         link("https://arxiv.org/abs/1706.06083", "Madry et al., 2018"),
         ") is available under Advanced.",
       ],
-      "There are R uniformly random starts (default 10), each run for K steps (default 50), all batched into one tensor. The box centre and the box corner indicated by the gradient at the centre are always tried as well.",
+      "There are R uniformly random starts (default 400), each run for K steps (default 200), all batched into one tensor. The box centre and the box corner indicated by the gradient at the centre are always tried as well.",
       "The attack stops as soon as a counterexample is confirmed. A point that is already misclassified without perturbation counts as a counterexample.",
       "Randomness comes from a seeded generator (mulberry32). Gradients are computed with tf.js on the GPU (WebGL) by default, falling back to the CPU if WebGL is unavailable. On the CPU backend, the same seed and settings give bit-for-bit identical results; on WebGL, results can differ slightly between devices. This affects only which counterexamples the attack finds, not their validity (each is re-checked with onnxruntime) and not certification (CROWN runs in float64 JavaScript).",
       "Gradients come from a TensorFlow.js translation of the ONNX model. The attack runs in a Web Worker, so the page stays responsive, and Cancel stops it immediately.",
     ]),
     para(
-      "Gradient attacks can miss counterexamples that sit beyond a region where the margin first increases. On the built-in benchmarks the attack misses 3 of the 39 published counterexamples; for the one we analysed (6×256 network, image prop_1, ε = 0.05), this is the reason.",
+      "Gradient attacks can miss counterexamples that sit beyond a region where the margin first increases, or inside a very thin unsafe region. See the Results tab for how often this happens on the built-in benchmarks.",
     ),
 
     el("h2", "", "How results are checked"),
     list([
       "Every counterexample is clamped to the box and re-evaluated with onnxruntime-web, which runs the original ONNX file independently of the translation. The class change is then confirmed in float64. Candidates that fail are discarded and counted as spurious.",
-      "Box bounds are rounded inwards to float32, so a counterexample lies inside the box exactly as specified, not just after rounding.",
-      "Before each run, a self-test compares the translation with onnxruntime-web on random inputs from the boxes (20 by default). A warning appears if they differ by more than 10⁻⁴, relative to the size of the output vector.",
+      "Box bounds are rounded inwards to float32, so a counterexample lies inside the box exactly as specified, not just after rounding. An input fixed to a single value that float32 cannot represent is set to the nearest float32, since a float32 network cannot be given the exact value.",
+      "Before each run, a self-test compares the translation with onnxruntime-web on random inputs from the boxes (100 by default). A warning appears if they differ by more than 10⁻⁴, relative to the size of the output vector.",
     ]),
 
     el("h2", "", "Optional: ε range per point"),
@@ -106,6 +112,12 @@ export function renderMethodPage({ renderMath }) {
       ],
       "VNN-COMP 2025 malbeware: a linear classifier of 64 × 64 malware images into 25 families; 14–19 images at each of ε = 1/255, 2/255 and 3/255. The benchmark's two convolutional models are not included.",
     ]),
+    para("Regression benchmarks (each a network and a list of published property files):"),
+    list([
+      "VNN-COMP 2025 collins_rul_cnn_2022: three convolutional networks predicting the remaining useful life of an engine from a window of sensor readings. A property perturbs 2, 4, 8 or 16 readings and is unsafe if the prediction leaves an interval around the true value. Grouped by network and number of perturbed readings: 12 settings of 4 properties.",
+      "VNN-COMP 2025 nn4sys learned index: two fully connected networks mapping a key to its position; a property is safe if, for every key in each of up to 1,000 small ranges, the predicted position stays within bounds. The six largest properties (3,000–60,000 ranges, up to 12 MB each) are left out as too large for a quick in-browser check.",
+      "VNN-COMP 2022 reach_prob_density: fully connected models of dynamical systems (ground-collision avoidance, a robot, a Van der Pol oscillator); a property is safe if, from every initial state in a box, the predicted state avoids an unsafe set. 12 properties each.",
+    ]),
     para(
       "Each instance comes with the published verdict of the competition's complete verifiers: robust, not robust, or undecided (every verifier timed out). Where verifiers disagreed, the instance is recorded as not robust, because a counterexample was submitted and the opposing claims were penalised. The verdicts appear next to the tool's results, and any contradiction is flagged.",
     ),
@@ -114,7 +126,7 @@ export function renderMethodPage({ renderMath }) {
     list([
       "Regression, standard robustness (‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ): the attack maximises the output change and reports the largest value found. A value above δ is a counterexample.",
       "Regression, Lipschitz robustness (‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞): the attack maximises the ratio. The largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio.",
-      "VNNLIB properties (untested, attack only): VNN-COMP property files with boxes and linear output constraints combined with and/or. The attack minimises min over cases of max over constraints of (aᵢ·y − bᵢ), and a value ≤ 0 is a counterexample.",
+      "Regression, output constraints (VNNLIB): your own VNN-COMP property files (input boxes and linear output conditions combined with and/or), checked as described above.",
     ]),
     el("p", "warning-box", "ε is in the model's own input units. If the network expects normalised inputs, ε (and the points) must be normalised too."),
 
@@ -127,8 +139,8 @@ export function renderMethodPage({ renderMath }) {
 
     el("h2", "", "Not included"),
     list([
-      "Branch and bound, which would make certification complete, and optimised relaxations (α-CROWN).",
-      "Convolutional layers and other activations.",
+      "Branch and bound over unstable ReLUs, which would make certification complete, and optimised relaxations (α-CROWN). Input splitting is only used for properties with at most 4 varying inputs.",
+      "Pooling, residual connections, grouped convolutions and activations other than ReLU (for certification).",
       "L2 perturbations.",
       "Gradient-free attacks (for example Square Attack). In our tests these found one counterexample that the gradient attack missed, but not reliably.",
     ]),

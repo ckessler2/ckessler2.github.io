@@ -14,7 +14,7 @@ import { createClassificationLoss, createTargetedClassificationLoss, createDevia
 import { selfTest } from "../check/ort-check.js";
 import { epsilonBox, median } from "../spec/points.js";
 import { disclaimerFor } from "./report.js";
-import { crownMarginLowerBound, FLOAT_TOLERANCE } from "../bounds/crown.js";
+import { crownMarginLowerBound, toleranceFor, FLOAT_TOLERANCE } from "../bounds/crown.js";
 
 const argmax = (y) => y.reduce((best, v, i) => (v > y[best] ? i : best), 0);
 const infNorm = (a, b) => a.reduce((m, v, i) => Math.max(m, Math.abs(v - b[i])), 0);
@@ -54,7 +54,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, cha
   const certifiedAt = (x, eps, label) => {
     const { lo, hi } = epsilonBox(x, eps, domainLo, domainHi);
     const bound = crownMarginLowerBound(chain, lo, hi, label);
-    return { bound, certified: bound > FLOAT_TOLERANCE };
+    return { bound, certified: bound > toleranceFor(0, test.maxAbsError) };
   };
 
   for (let i = 0; i < points.inputs.length; i++) {

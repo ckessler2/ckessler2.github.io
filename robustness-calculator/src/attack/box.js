@@ -36,6 +36,11 @@ export function float32AtMost(x) {
  * Build an attack box from double bounds.
  * Returns { lo, hi } (the exact bounds, Float64Array) and { lo32, hi32 }
  * (inward-rounded float32 bounds the attack actually uses).
+ *
+ * An input whose interval contains no float32 value (in practice an input
+ * fixed to one value float32 cannot represent, lo = hi) is set to the
+ * nearest float32: a float32 network cannot be given the exact value. Such
+ * inputs are listed in `rounded` and accepted at that value by boxContains.
  */
 export function makeBox(lo, hi, label = "Input box") {
   const n = lo.length;
@@ -43,6 +48,7 @@ export function makeBox(lo, hi, label = "Input box") {
   const hi64 = Float64Array.from(hi);
   const lo32 = new Float32Array(n);
   const hi32 = new Float32Array(n);
+  const rounded = [];
   for (let i = 0; i < n; i++) {
     if (!Number.isFinite(lo64[i]) || !Number.isFinite(hi64[i])) {
       throw new Error(`${label}: input ${i} is unbounded; every input needs a finite lower and upper bound.`);
@@ -53,15 +59,17 @@ export function makeBox(lo, hi, label = "Input box") {
     lo32[i] = float32AtLeast(lo64[i]);
     hi32[i] = float32AtMost(hi64[i]);
     if (lo32[i] > hi32[i]) {
-      throw new Error(`${label}: input ${i} interval [${lo64[i]}, ${hi64[i]}] contains no float32 value.`);
+      lo32[i] = hi32[i] = Math.fround(0.5 * (lo64[i] + hi64[i]));
+      rounded.push(i);
     }
   }
-  return { lo: lo64, hi: hi64, lo32, hi32, size: n };
+  return { lo: lo64, hi: hi64, lo32, hi32, size: n, rounded };
 }
 
 export function boxContains(box, x) {
+  const rounded = new Set(box.rounded ?? []);
   for (let i = 0; i < box.size; i++) {
-    if (!(x[i] >= box.lo[i] && x[i] <= box.hi[i])) return false;
+    if (rounded.has(i) ? x[i] !== box.lo32[i] : !(x[i] >= box.lo[i] && x[i] <= box.hi[i])) return false;
   }
   return true;
 }

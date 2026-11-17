@@ -7,6 +7,7 @@
 
 export const TASKS = {
   classification: "Classification",
+  properties: "Regression: output constraints (VNNLIB)",
   "regression-standard": "Regression: standard (δ)",
   "regression-lipschitz": "Regression: Lipschitz (L)",
 };

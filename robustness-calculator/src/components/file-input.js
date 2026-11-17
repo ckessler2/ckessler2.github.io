@@ -22,17 +22,20 @@ export function stripGz(name) {
   return name.replace(/\.gz$/i, "");
 }
 
-export function createFileInput({ accept, label, onFile }) {
+/** onFile(file), or onFile(files[]) when `multiple` is set. */
+export function createFileInput({ accept, label, onFile, multiple = false }) {
   const row = document.createElement("div");
   row.className = "file-row";
 
   const input = document.createElement("input");
   input.type = "file";
   input.accept = accept;
+  input.multiple = multiple;
   input.setAttribute("aria-label", label);
   input.addEventListener("change", async () => {
-    const file = input.files?.[0];
-    if (file) await onFile(file);
+    const files = Array.from(input.files ?? []);
+    if (!files.length) return;
+    await onFile(multiple ? files : files[0]);
   });
 
   const heading = document.createElement("strong");

@@ -3,7 +3,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildReluChain, crownMarginLowerBound } from "../src/bounds/crown.js";
+import { buildReluChain, crownMarginLowerBound, chainForward } from "../src/bounds/crown.js";
 import { parseOnnxModel } from "../src/onnx/onnx-model.js";
 import { readMlp, exactRobust, margin } from "./helpers/exact-bab.js";
 import { buildToyClassifier } from "./helpers/toy-classifier.js";
@@ -75,11 +75,7 @@ test("chain extraction folds normalisation and reshapes, and matches onnxruntime
   const rng = createRng(5);
   for (let t = 0; t < 10; t++) {
     const x = [rng() - 0.5, rng() - 0.5, rng() - 0.5];
-    let h = x;
-    chain.layers.forEach((L, k) => {
-      const o = Array.from({ length: L.nout }, (_, r) => L.b[r] + h.reduce((s, v, i) => s + v * L.W[r * L.nin + i], 0));
-      h = k < chain.layers.length - 1 ? o.map((v) => Math.max(0, v)) : o;
-    });
+    const h = Array.from(chainForward(chain, x));
     const ref = await checker.evaluate(Float32Array.from(x));
     h.forEach((v, j) => assert.ok(Math.abs(v - ref[j]) < 1e-5, `${v} vs ${ref[j]}`));
     // A box of zero width: the bound equals the true margin.
@@ -124,4 +120,33 @@ test("run: certified points skip the attack and are never contradicted by exact 
   });
   assert.equal(r.summary.certifiedCount, certified);
   assert.ok(r.summary.robustAccuracyLowerBound <= r.summary.robustAccuracyUpperBound);
+});
+
+test("property sets: certification, input splitting and counterexamples agree with the exact answer", async () => {
+  const { tf, load } = await import("./helpers/setup.js");
+  const { model: writeModel, node, tensor } = await import("./helpers/onnx-writer.js");
+  const { parseVnnlib } = await import("../src/spec/vnnlib.js");
+  const { runPropertySet } = await import("../src/attack/run-properties.js");
+  // y = relu(x0 − x1) + relu(x1 − x0) = |x0 − x1| on [0,1]²: max 1 at the corners (1,0) and (0,1).
+  const bytes = writeModel({
+    nodes: [node("MatMul", ["x", "W"], ["h"]), node("Relu", ["h"], ["r"]), node("MatMul", ["r", "V"], ["y"])],
+    initializers: [tensor("W", [2, 2], [1, -1, -1, 1]), tensor("V", [2, 1], [1, 1])],
+    input: ["x", [1, 2]],
+    output: ["y", [1, 1]],
+  });
+  const { model: m, checker } = await load(bytes);
+  const chain = buildReluChain(parseOnnxModel(bytes), m.featureShape);
+  const prop = (body) => `(declare-const X_0 Real) (declare-const X_1 Real) (declare-const Y_0 Real)
+    (assert (>= X_0 0)) (assert (<= X_0 1)) (assert (>= X_1 0)) (assert (<= X_1 1)) ${body}`;
+  const properties = [
+    { name: "max > 1.01 (safe)", spec: parseVnnlib(prop("(assert (>= Y_0 1.01))")) },
+    { name: "max > 0.99 (unsafe, needle at a corner)", spec: parseVnnlib(prop("(assert (>= Y_0 0.99))")) },
+    { name: "y in [0.4, 0.6] reachable (unsafe)", spec: parseVnnlib(prop("(assert (>= Y_0 0.4)) (assert (<= Y_0 0.6))")) },
+  ];
+  const r = await runPropertySet({ tf, model: m, checker, chain, properties, settings: { seed: 0, restarts: 2, steps: 5, schedule: "apgd", selfTestSamples: 5 } });
+  assert.deepEqual(r.rows.map((row) => row.status), ["certified", "counterexample", "counterexample"]);
+  for (const row of r.rows.filter((x) => x.counterexample)) {
+    const [x0, x1] = row.counterexample.x;
+    assert.ok(x0 >= 0 && x0 <= 1 && x1 >= 0 && x1 <= 1);
+  }
 });
