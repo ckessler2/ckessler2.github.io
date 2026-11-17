@@ -14,7 +14,7 @@ import { createClassificationLoss, createTargetedClassificationLoss, createDevia
 import { selfTest } from "../check/ort-check.js";
 import { epsilonBox, median } from "../spec/points.js";
 import { disclaimerFor } from "./report.js";
-import { certifierMarginLowerBound, normaliseCertifier, toleranceFor, FLOAT_TOLERANCE } from "../bounds/crown.js";
+import { crownMarginLowerBound, toleranceFor, FLOAT_TOLERANCE } from "../bounds/crown.js";
 
 const argmax = (y) => y.reduce((best, v, i) => (v > y[best] ? i : best), 0);
 const infNorm = (a, b) => a.reduce((m, v, i) => Math.max(m, Math.abs(v - b[i])), 0);
@@ -27,7 +27,6 @@ function misclassified(y, label) {
 export async function runPointsCheck({ tf, model, checker, points, settings, chain = null, chainError = null, onProgress = () => {} }) {
   const t0 = performance.now();
   const { task, epsilon, seed, restarts, steps } = settings;
-  const certifier = normaliseCertifier(settings.certifier);
   const alpha = settings.alpha ?? defaultAlpha(steps);
   const schedule = settings.schedule ?? "constant";
   const { domainLo = null, domainHi = null } = settings;
@@ -52,10 +51,9 @@ export async function runPointsCheck({ tf, model, checker, points, settings, cha
   const rng = createRng(seed);
   const rows = [];
   const certify = task === "classification" && settings.certify !== false && chain !== null;
-  const certificationMethod = certify ? certifier : task === "classification" && settings.certify !== false ? "unavailable" : "off";
   const certifiedAt = (x, eps, label) => {
     const { lo, hi } = epsilonBox(x, eps, domainLo, domainHi);
-    const bound = certifierMarginLowerBound(chain, lo, hi, label, { certifier });
+    const bound = crownMarginLowerBound(chain, lo, hi, label);
     return { bound, certified: bound > toleranceFor(0, test.maxAbsError) };
   };
 
@@ -117,7 +115,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, cha
       };
 
       if (certify) {
-        progress({ phase: "certify", certifier });
+        progress({ phase: "certify" });
         const c = certifiedAt(points.inputs[i], epsilon, label);
         row.certifiedBound = c.bound;
         row.certified = c.certified;
@@ -147,7 +145,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, cha
         let hi = epsilon;
         for (let it = 0; it < (settings.searchIterations ?? 8); it++) {
           const mid = 0.5 * (lo + hi);
-          progress({ phase: "certify", epsilon: mid, certifier });
+          progress({ phase: "certify", epsilon: mid });
           if (certifiedAt(points.inputs[i], mid, label).certified) lo = mid;
           else hi = mid;
         }
@@ -217,7 +215,7 @@ export async function runPointsCheck({ tf, model, checker, points, settings, cha
     summary.cleanAccuracy = rows.filter((r) => r.cleanCorrect).length / N;
     summary.robustAccuracyUpperBound = rows.filter((r) => r.cleanCorrect && !r.broken).length / N;
     summary.brokenCount = rows.filter((r) => r.broken).length;
-    summary.certification = certificationMethod;
+    summary.certification = certify ? "crown" : task === "classification" && settings.certify !== false ? "unavailable" : "off";
     summary.certificationNote = chainError;
     if (certify) {
       summary.certifiedCount = rows.filter((r) => r.status === "certified").length;

@@ -1,6 +1,17 @@
-# rapidNNV
+# easyNNV
 
-*Quick neural network verification estimates, in your browser, with no setup.*
+*Neural network verification from your browser.*
+
+The page has two tools:
+
+- **rapidNNV** (working): quick verification estimates that run entirely in
+  the browser, with no setup. Described below.
+- **VehicleWrapper** (planned): complete verification of
+  [Vehicle](https://vehicle-lang.readthedocs.io/) specifications with
+  Marabou, run by a local runner (a Docker container) behind the same page.
+  The tab describes the proposed design; nothing is implemented yet.
+
+## rapidNNV
 
 A static, client-side tool that checks the robustness of ONNX networks: ε-ball
 robustness of classifiers, and published-style regression properties (an

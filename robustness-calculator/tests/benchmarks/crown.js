@@ -2,7 +2,7 @@
 // benchmarks against their published verdicts.
 //
 //   cd robustness-calculator && npm install
-//   node tests/benchmarks/crown.js [--tasks=classification,properties] [--benchmarks=mnist_fc-256x6,...] [--eps=0.03,0.05] [--certifier=crown|acrown-lite]
+//   node tests/benchmarks/crown.js [--tasks=classification,properties] [--benchmarks=mnist_fc-256x6,...] [--eps=0.03,0.05]
 //
 // Defaults: every benchmark in src/spec/benchmark.js, at every ε with
 // published verdicts, with the page's default attack settings. Files are
@@ -28,7 +28,6 @@ const arg = (name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.spli
 const only = arg("benchmarks")?.split(",");
 const epsFilter = arg("eps")?.split(",");
 const tasks = arg("tasks")?.split(",");
-const certifier = arg("certifier") ?? "crown";
 
 const CACHE = new URL("../../.bench-cache/", import.meta.url);
 mkdirSync(CACHE, { recursive: true });
@@ -81,7 +80,7 @@ for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tas
       checker,
       chain: chainResult,
       properties: texts.map((t, i) => ({ name: b.imageNames[i], spec: parseVnnlib(t) })),
-      settings: { seed: 0, ...ATTACK_DEFAULTS.properties, schedule: "apgd", certifier },
+      settings: { seed: 0, ...ATTACK_DEFAULTS.properties, schedule: "apgd" },
     });
     const line = tally(totals, b, "", r.rows, verdicts);
     const n = r.rows.length;
@@ -114,7 +113,6 @@ for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tas
         seed: 0,
         ...ATTACK_DEFAULTS.points,
         schedule: "apgd",
-        certifier,
         domainLo: new Array(model.inputSize).fill(0),
         domainHi: new Array(model.inputSize).fill(1),
       },
@@ -132,8 +130,7 @@ for (const b of BENCHMARKS.filter((b) => (!only || only.includes(b.id)) && (!tas
   }
 }
 
-console.log(`\nCertification method: ${certifier}.`);
-console.log("Legend: C = certified, x = counterexample, . = unknown; u = published safe/robust, s = published not, ? = undecided.");
+console.log("\nLegend: C = certified, x = counterexample, . = unknown; u = published safe/robust, s = published not, ? = undecided.");
 for (const [task, t] of Object.entries(allTotals)) {
   console.log(`
 [${task}] ${t.points} instances: ${t.certified} certified, ${t.counterexample} counterexamples, ${t.unknown} unknown.

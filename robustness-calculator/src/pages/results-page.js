@@ -157,7 +157,7 @@ export function renderResultsPage() {
     list([
       "Toy-network check (with exact ground truth): the attack finds all non-robust points, and certification never falsely proves a non-robust case.",
       "Model-translation check: the ONNX-to-tf.js translation is cross-checked against onnxruntime-web on ACAS Xu and benchmark networks.",
-      "You can rerun these checks with `node tests/benchmarks/crown.js` and `npm test`.",
+      ["You can rerun these checks with ", el("code", "", "node tests/benchmarks/crown.js"), " and ", el("code", "", "npm test"), "."],
     ]),
   );
 

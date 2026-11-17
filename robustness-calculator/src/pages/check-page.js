@@ -33,9 +33,6 @@ function note(text) {
   return el("p", "section-note", text);
 }
 
-const certifiedByBounds = (certification) => certification === "crown" || certification === "acrown-lite";
-const certifierLabel = (certification) => (certification === "acrown-lite" ? "α-CROWN-lite" : "CROWN");
-
 function accordion(state, key, title, content, defaultOpen = true) {
   const open = state.getState().accordionState[key] ?? defaultOpen;
   return createAccordion({
@@ -306,27 +303,9 @@ function renderAdvancedSection(ctx) {
     const certBox = document.createElement("input");
     certBox.type = "checkbox";
     certBox.checked = a.certify !== false;
-    certBox.addEventListener("change", () => {
-      state.patch("attack", { certify: certBox.checked });
-      rerender();
-    });
-    certLabel.append(certBox, " Certify with bound propagation before attacking");
+    certBox.addEventListener("change", () => state.patch("attack", { certify: certBox.checked }));
+    certLabel.append(certBox, " Certify with CROWN before attacking");
     content.append(certLabel);
-
-    if (a.certify !== false) {
-      content.append(
-        selectField({
-          name: "certifier",
-          label: "Certification method",
-          value: a.certifier ?? "crown",
-          options: [
-            { value: "crown", label: "CROWN (faster baseline)" },
-            { value: "acrown-lite", label: "α-CROWN-lite (stronger, slower)" },
-          ],
-          onChange: setA("certifier"),
-        }),
-      );
-    }
   }
 
   if (s.mode === "points") {
@@ -398,7 +377,6 @@ function validateSettings(attack) {
   if (!Number.isInteger(attack.steps) || attack.steps < 1 || attack.steps > 100000) errors.push("Steps must be between 1 and 100000.");
   if (attack.alpha !== "" && !(attack.alpha > 0)) errors.push("α must be positive (or blank for 2.5 / K).");
   if (!Number.isInteger(attack.selfTestSamples) || attack.selfTestSamples < 1) errors.push("Self-test samples must be ≥ 1.");
-  if (!["crown", "acrown-lite"].includes(attack.certifier ?? "crown")) errors.push("Unknown certification method.");
   return errors;
 }
 
@@ -408,7 +386,7 @@ function progressText(p) {
   const unit = p.region !== undefined || p.unit === "property" ? "property" : "point";
   if (p.phase === "certify") {
     const at = p.epsilon !== undefined ? ` at ε = ${formatNumber(p.epsilon, 4)}` : "";
-    return `${p.points > 0 ? `${unit} ${p.point + 1}/${p.points} · ` : ""}certifying with ${certifierLabel(p.certifier)}${at}`;
+    return `${p.points > 0 ? `${unit} ${p.point + 1}/${p.points} · ` : ""}certifying with CROWN${at}`;
   }
   const step = `step ${p.step}/${p.steps}`;
   if (p.region !== undefined) {
@@ -471,7 +449,6 @@ async function startRun(ctx) {
     schedule: s.attack.schedule,
     selfTestSamples: s.attack.selfTestSamples,
     certify: s.attack.certify !== false,
-    certifier: s.attack.certifier ?? "crown",
   };
 
   let type;
@@ -596,7 +573,6 @@ function reproducibility(result) {
     schedule: s.schedule,
     alpha: s.schedule === "constant" ? s.alpha : undefined,
     backend: s.backend,
-    certifier: s.certifier,
     selfTestSamples: result.selfTest.count,
     selfTestMaxRelError: result.selfTest.maxRelError,
     tfjs: TFJS_VERSION,
@@ -619,7 +595,7 @@ function renderPropertiesResult(ctx, result) {
   const { state } = ctx;
   const group = el("div", "accordion-group");
   const sm = result.summary;
-  const certified = certifiedByBounds(sm.certification);
+  const certified = sm.certification === "crown";
 
   const summary = el("div", "page-flow");
   summary.append(...renderStatusOverview(result, { rangeLabel: "Safe share", safe: "safe", unsafe: "unsafe" }));
@@ -643,7 +619,7 @@ function renderPropertiesResult(ctx, result) {
     ...(certified
       ? [
           {
-            label: `Slack ≥ (${certifierLabel(sm.certification)})`,
+            label: "Slack ≥ (CROWN)",
             title: "Certified lower bound on how far the unsafe condition is from holding over the whole box; certified when positive beyond the float32 tolerance. Low-dimensional boxes may instead be certified by splitting them into pieces.",
             value: (r) => (r.status === "certified" && r.certifiedBySplitting ? `by splitting (${r.splitPieces} pieces)` : r.certifiedSlack === undefined ? "–" : formatNumber(r.certifiedSlack, 4)),
           },
@@ -724,7 +700,7 @@ function renderPointsResult(ctx, result) {
   }
   const warn = selfTestWarning(result);
   if (warn) summary.append(warn);
-  if (!certifiedByBounds(sm.certification)) summary.append(el("p", "disclaimer", disclaimerFor(result)));
+  if (sm.certification !== "crown") summary.append(el("p", "disclaimer", disclaimerFor(result)));
   group.append(accordion(state, "result", "Result", summary));
 
   const perPoint = el("div", "page-flow");
@@ -819,9 +795,9 @@ function pointColumns(result) {
       },
       { label: "Adv. pred.", value: (r) => (r.broken && r.cleanCorrect ? String(r.counterexample.prediction) : "–") },
     ];
-    if (certifiedByBounds(result.summary.certification)) {
+    if (result.summary.certification === "crown") {
       cols.push({
-        label: `Margin ≥ (${certifierLabel(result.summary.certification)})`,
+        label: "Margin ≥ (CROWN)",
         title: "Certified lower bound on the margin over the whole ε-ball; certified when above the float32 tolerance",
         value: (r) => (r.certifiedBound === undefined ? "–" : formatNumber(r.certifiedBound, 4)),
       });
@@ -841,10 +817,10 @@ function pointColumns(result) {
           (r.status === "counterexample" && ref.verdicts[r.index] === "unsat") || (r.status === "certified" && ref.verdicts[r.index] === "sat") ? "cell-bad" : "",
       });
     }
-    if (s.searchEpsilon && certifiedByBounds(result.summary.certification)) {
+    if (s.searchEpsilon && result.summary.certification === "crown") {
       cols.push({
         label: "Certified ε ≥",
-        title: `Largest ε (by bisection) at which ${certifierLabel(result.summary.certification)} certifies the point`,
+        title: "Largest ε (by bisection) at which CROWN certifies the point",
         value: (r) => (r.certifiedRadiusAtLeastEpsilon ? `≥ ${formatNumber(s.epsilon)}` : formatNumber(r.certifiedRadius, 4)),
       });
     }

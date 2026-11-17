@@ -2,12 +2,17 @@ import { renderNav } from "../components/nav.js";
 import { renderCheckPage } from "../pages/check-page.js";
 import { renderMethodPage } from "../pages/method-page.js";
 import { renderResultsPage } from "../pages/results-page.js";
+import { renderVehiclePage } from "../pages/vehicle-page.js";
 import { renderMath } from "./math.js";
 
 const routes = {
   check: {
-    label: "Tool",
+    label: "rapidNNV",
     render: renderCheckPage,
+  },
+  vehicle: {
+    label: "VehicleWrapper",
+    render: renderVehiclePage,
   },
   method: {
     label: "Method",
@@ -73,7 +78,7 @@ export function createRouter(root, state, worker) {
 
     const title = document.createElement("h1");
     title.className = "site-title";
-    title.textContent = "rapidNNV";
+    title.textContent = "easyNNV";
 
     const byline = document.createElement("p");
     byline.className = "site-byline";
@@ -87,7 +92,7 @@ export function createRouter(root, state, worker) {
 
     const subtitle = document.createElement("p");
     subtitle.className = "site-subtitle";
-    subtitle.textContent = "Quick neural network verification estimates, in your browser, with no setup";
+    subtitle.textContent = "Neural network verification from your browser";
 
     header.append(headerTop, titleRow, subtitle, renderNav(routes, activeRoute));
 
