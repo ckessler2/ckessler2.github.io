@@ -57,9 +57,16 @@
 
 .rf-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(90px, 132px);
+  /* The input sits right after its label (e.g. "ε ⓘ [0.1]"), not at the far edge. */
+  grid-template-columns: max-content minmax(90px, 132px);
+  justify-content: start;
   gap: 4px 12px;
   align-items: center;
+}
+
+/* Advanced has many number rows: a fixed label column keeps their inputs aligned. */
+.rapid-advanced .rf-field:not(.rf-wide):not(.rf-stacked) {
+  grid-template-columns: 9.5rem minmax(90px, 132px);
 }
 
 .rf-field.rf-wide {

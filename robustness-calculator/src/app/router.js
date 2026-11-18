@@ -1,5 +1,5 @@
 import { renderToolSwitch, renderSubtabs } from "../components/nav.js";
-import { el, popover } from "../components/ui.js";
+import { el } from "../components/ui.js";
 import { renderCheckPage } from "../pages/check-page.js";
 import { renderMethodPage } from "../pages/method-page.js";
 import { renderResultsPage } from "../pages/results-page.js";
@@ -25,9 +25,9 @@ function resolveRoute() {
   return routes[routeKey] ? routeKey : "rapid";
 }
 
-function settingsMenu(appState, state, render) {
-  const option = (text, checked, onChange) => {
-    const label = el("label", "menu-check");
+function displayToggles(appState, state, render) {
+  const toggle = (text, checked, onChange) => {
+    const label = el("label", "header-check");
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = checked;
@@ -35,23 +35,18 @@ function settingsMenu(appState, state, render) {
     label.append(input, " ", text);
     return label;
   };
-  const button = el("button", "icon-button", "⚙");
-  button.setAttribute("aria-label", "Display settings");
-  button.title = "Display settings";
-  return popover(
-    button,
-    [
-      option("Dark mode", appState.useDarkMode, (v) => {
-        state.set("useDarkMode", v);
-        render();
-      }),
-      option("Serif font", !appState.useSansSerif, (v) => {
-        state.set("useSansSerif", !v);
-        render();
-      }),
-    ],
-    { className: "settings-menu", align: "end" },
+  const box = el("div", "header-checks");
+  box.append(
+    toggle("Sans serif", appState.useSansSerif, (v) => {
+      state.set("useSansSerif", v);
+      render();
+    }),
+    toggle("Dark mode", appState.useDarkMode, (v) => {
+      state.set("useDarkMode", v);
+      render();
+    }),
   );
+  return box;
 }
 
 function footer() {
@@ -83,7 +78,7 @@ export function createRouter(root, state, worker) {
     const bar = el("div", "header-bar");
     const title = el("a", "site-title", "easyNNV");
     title.href = "#/rapid";
-    bar.append(title, renderToolSwitch(routes, activeRoute), el("span", "header-spacer"), settingsMenu(appState, state, render));
+    bar.append(title, renderToolSwitch(routes, activeRoute), el("span", "header-spacer"), displayToggles(appState, state, render));
     header.append(bar, renderSubtabs(routes, activeRoute));
 
     const pageRoot = document.createElement("main");

@@ -555,12 +555,13 @@ function renderSetup(ctx) {
 
   flow.append(
     fieldRow({
-      label: "Robustness",
+      label: "Property",
       info: infoTip(
         [
-          "Classification: the predicted class must not change anywhere within ε.",
-          "Output constraints: VNNLIB properties, “every input in the box gives safe outputs”.",
-          "Standard (δ): no output may move by more than δ. Lipschitz (L): output change ≤ L × input change.",
+          "Classification robustness: the predicted class does not change anywhere within ε of each point.",
+          "Bounded change (δ): within ε of each point, no output moves by more than δ.",
+          "Lipschitz bound (L): within ε of each point, output change ≤ L × input change.",
+          "Output constraints: each VNNLIB file gives an input box and unsafe output conditions; no input in the box may reach them.",
         ],
         { href: METHOD },
       ),

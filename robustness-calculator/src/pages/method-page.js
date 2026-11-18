@@ -44,20 +44,20 @@ export function renderMethodPage({ renderMath }) {
     {
       id: "inputs",
       title: "What it checks",
-      summary: "You give it an ONNX network and a specification; the robustness type decides what the specification is and which methods run.",
+      summary: "You give it an ONNX network and a specification; the property decides what the specification is and which methods run.",
       body: [
         table(
-          ["Robustness type", "Specification", "Methods"],
+          ["Property", "Specification", "Methods"],
           [
-            ["Classification", "CSV of inputs and labels, radius ε", "CROWN, then the attack"],
-            [["Regression, standard", note("‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ")], "CSV of inputs, ε and δ", "Attack only"],
-            [["Regression, Lipschitz", note("‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞")], "CSV of inputs, ε and L", "Attack only"],
-            [["Regression, output constraints", note("input box ⇒ unsafe output condition")], "VNNLIB property files", "CROWN, input splitting, then the attack"],
+            ["Classification robustness", "CSV of inputs and labels, radius ε", "CROWN, then the attack"],
+            [["Regression robustness: bounded change", note("‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ")], "CSV of inputs, ε and δ", "Attack only"],
+            [["Regression robustness: Lipschitz bound", note("‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞")], "CSV of inputs, ε and L", "Attack only"],
+            [["Output constraints", note("input box ⇒ unsafe output condition")], "VNNLIB property files", "CROWN, input splitting, then the attack"],
           ],
         ),
         defs([
-          ["Standard", "The attack maximises the output change and reports the largest value found; a value above δ is a counterexample."],
-          ["Lipschitz", "The attack maximises the ratio; the largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio."],
+          ["Bounded change", "The attack maximises the output change and reports the largest value found; a value above δ is a counterexample."],
+          ["Lipschitz bound", "The attack maximises the ratio; the largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio."],
           ["Output constraints", "Your own VNN-COMP property files (input boxes and linear output conditions combined with and/or). Each property is certified safe, shown unsafe by a counterexample, or left unknown."],
         ]),
         p(
@@ -145,7 +145,7 @@ export function renderMethodPage({ renderMath }) {
           ["Stopping", "As soon as a counterexample is confirmed. A point already misclassified without perturbation counts as a counterexample."],
         ]),
         table(
-          ["Robustness type", "Starts R", "Steps K", "Why"],
+          ["Property", "Starts R", "Steps K", "Why"],
           [
             ["Points (classification, standard, Lipschitz)", "10", "50", "every uncertified point is a high-dimensional ε-ball"],
             ["Regression properties", "400", "200", "the built-in boxes are low-dimensional and cheap to attack"],

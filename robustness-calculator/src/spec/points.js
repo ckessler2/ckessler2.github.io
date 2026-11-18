@@ -6,10 +6,10 @@
 // treated as a header. Lines starting with # are ignored.
 
 export const TASKS = {
-  classification: "Classification",
-  properties: "Regression: output constraints (VNNLIB)",
-  "regression-standard": "Regression: standard (δ)",
-  "regression-lipschitz": "Regression: Lipschitz (L)",
+  classification: "Classification robustness (ε-ball)",
+  "regression-standard": "Regression robustness: bounded change (δ)",
+  "regression-lipschitz": "Regression robustness: Lipschitz bound (L)",
+  properties: "Output constraints (VNNLIB file)",
 };
 
 export function parsePointsCsv(text, inputSize, task) {

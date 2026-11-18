@@ -52,7 +52,7 @@ export function renderVehicleMethodPage() {
               link("#/vehicle", "Run tab"),
               ", copy the start command (it holds a fingerprint of a secret made for this tab) and run it in a terminal. The first start downloads the image (about 650 MB).",
             ],
-            "Press Connect. The page contacts the runner only then, so opening the tab never triggers a browser prompt; it reconnects by itself after a reload.",
+            "Press Connect runner. The page contacts the runner only then, so opening the tab never triggers a browser prompt; it reconnects by itself after a reload.",
             [
               "Write a ",
               code(".vcl"),
@@ -65,13 +65,41 @@ export function renderVehicleMethodPage() {
               code("@dataset"),
               ", ",
               code("@parameter"),
-              ") its input; inferred parameters are left to Vehicle.",
+              ") its input under Networks (or Inputs) in the toolbar; inferred parameters are left to Vehicle.",
             ],
-            "Set a time limit and press Verify. Vehicle's output appears as plain text as it arrives. Cancel closes the connection, and the runner stops within a few seconds.",
+            "Set a time limit and press Verify. Results fill in as Vehicle reports them (see Reading the results). Cancel closes the connection, and the runner stops within a few seconds.",
           ],
           { ordered: true, className: "docs-steps" },
         ),
         callout("Reloading or closing the page cancels a running verification, and the runner stops by itself once the page is gone.", "note"),
+      ],
+    },
+    {
+      id: "results",
+      title: "Reading the results",
+      summary: "The headline counts how many properties hold; below it is one row per property, and Vehicle's own output is kept under Full output.",
+      body: [
+        defs([
+          ["✓ proved", "Marabou proved that no counterexample exists: the property holds for every input it quantifies over."],
+          ["✗ counterexample", "Marabou found inputs that break the property. Open the row to see their values, e.g. x = [0.75, 0.75]."],
+          ["⏱ timeout", "The time limit ran out before Marabou decided. Raise the limit under Time limit, or simplify the property."],
+          ["○ pending", "Before a run, or while it runs: the property has not been reported yet."],
+          ["– cancelled / not checked", "The run was cancelled, or stopped with an error, before this property was reached."],
+          ["? not reported", "The run finished, but Vehicle's output did not mention this property; check Full output."],
+        ]),
+        subhead("The ≤ badge"),
+        p(
+          "Marabou cannot express strict inequalities (x < y), so Vehicle relaxes them to x ≤ y and warns. Rows marked ≤ are affected: their verdicts are exact up to the solver's tiny tolerance, but a counterexample may lie exactly on the boundary of the property (for example an output of exactly 1.5 for “below 1.5”). The warning is shown once above the rows instead of once per property.",
+        ),
+        subhead("Properties over many elements"),
+        p(
+          "A property declared over a vector or a dataset (for example one per test image) is checked element by element. Its elements are grouped into one row, such as “robust — 41 proved · 2 counterexamples”; open it to see the elements that did not hold.",
+        ),
+        subhead("Errors and the full output"),
+        p(
+          "If Vehicle stops with an error (for example a syntax error in the specification), its message is shown instead of the rows, with a button that selects the line it refers to in the editor. Vehicle's complete output, including every warning, is always available under Full output, with Copy and Download.",
+        ),
+        callout("After you edit the specification or its inputs, the previous result is dimmed until you verify again, so a result always matches what it was run on.", "note"),
       ],
     },
     {
