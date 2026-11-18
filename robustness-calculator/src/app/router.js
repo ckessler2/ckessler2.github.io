@@ -1,4 +1,5 @@
-import { renderNav } from "../components/nav.js";
+import { renderToolSwitch, renderSubtabs } from "../components/nav.js";
+import { el, popover } from "../components/ui.js";
 import { renderCheckPage } from "../pages/check-page.js";
 import { renderMethodPage } from "../pages/method-page.js";
 import { renderResultsPage } from "../pages/results-page.js";
@@ -24,17 +25,41 @@ function resolveRoute() {
   return routes[routeKey] ? routeKey : "rapid";
 }
 
-function createToggle(text, checked, onChange) {
-  const label = document.createElement("label");
-  label.className = "checkbox header-toggle";
-  const span = document.createElement("span");
-  span.textContent = text;
-  const input = document.createElement("input");
-  input.type = "checkbox";
-  input.checked = checked;
-  input.addEventListener("change", () => onChange(input.checked));
-  label.append(span, input);
-  return label;
+function settingsMenu(appState, state, render) {
+  const option = (text, checked, onChange) => {
+    const label = el("label", "menu-check");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.checked = checked;
+    input.addEventListener("change", () => onChange(input.checked));
+    label.append(input, " ", text);
+    return label;
+  };
+  const button = el("button", "icon-button", "⚙");
+  button.setAttribute("aria-label", "Display settings");
+  button.title = "Display settings";
+  return popover(
+    button,
+    [
+      option("Dark mode", appState.useDarkMode, (v) => {
+        state.set("useDarkMode", v);
+        render();
+      }),
+      option("Serif font", !appState.useSansSerif, (v) => {
+        state.set("useSansSerif", !v);
+        render();
+      }),
+    ],
+    { className: "settings-menu", align: "end" },
+  );
+}
+
+function footer() {
+  const node = el("footer", "site-footer");
+  const home = el("a", "inline-link", "Homepage");
+  home.href = "../index.html";
+  node.append("easyNNV: neural network verification from your browser · by Colin Kessler (", home, ")");
+  return node;
 }
 
 export function createRouter(root, state, worker) {
@@ -45,57 +70,19 @@ export function createRouter(root, state, worker) {
     document.body.dataset.theme = appState.useDarkMode ? "dark" : "light";
     root.replaceChildren();
 
-    const shell = document.createElement("div");
-    shell.className = "site-shell";
-
-    const header = document.createElement("header");
-    header.className = "site-header";
-
-    const headerTop = document.createElement("div");
-    headerTop.className = "header-top";
-
-    const toggles = document.createElement("div");
-    toggles.className = "header-toggle-stack";
-    toggles.append(
-      createToggle("sans serif", appState.useSansSerif, (v) => {
-        state.set("useSansSerif", v);
-        render();
-      }),
-      createToggle("dark mode", appState.useDarkMode, (v) => {
-        state.set("useDarkMode", v);
-        render();
-      }),
-    );
-    headerTop.append(toggles);
-
-    const titleRow = document.createElement("div");
-    titleRow.className = "site-title-row";
-
-    const title = document.createElement("h1");
-    title.className = "site-title";
-    title.textContent = "easyNNV";
-
-    const byline = document.createElement("p");
-    byline.className = "site-byline";
-    byline.append("by Colin Kessler (");
-    const homepageLink = document.createElement("a");
-    homepageLink.href = "../index.html";
-    homepageLink.textContent = "Homepage";
-    homepageLink.className = "inline-link";
-    byline.append(homepageLink, ")");
-    titleRow.append(title, byline);
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "site-subtitle";
-    subtitle.textContent = "Neural network verification from your browser";
-
-    header.append(headerTop, titleRow, subtitle, renderNav(routes, activeRoute));
+    const shell = el("div", "site-shell");
+    const header = el("header", "site-header");
+    const bar = el("div", "header-bar");
+    const title = el("a", "site-title", "easyNNV");
+    title.href = "#/rapid";
+    bar.append(title, renderToolSwitch(routes, activeRoute), el("span", "header-spacer"), settingsMenu(appState, state, render));
+    header.append(bar, renderSubtabs(routes, activeRoute));
 
     const pageRoot = document.createElement("main");
     pageRoot.className = "page-stack";
     pageRoot.append(routes[activeRoute].render({ state, worker, renderMath, rerender: render }));
 
-    shell.append(header, pageRoot);
+    shell.append(header, pageRoot, footer());
     root.append(shell);
   }
 
