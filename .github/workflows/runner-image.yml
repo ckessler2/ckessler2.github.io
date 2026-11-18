@@ -1,0 +1,65 @@
+# Builds the easyNNV runner image with the newest Vehicle and Marabou, smoke-tests it, and
+# publishes it to ghcr.io/ckessler2/easynnv-runner. Runs daily, so the image tracks new releases.
+# An image is published only if the smoke test passes and something changed (base image,
+# any installed package version, or the runner's own files), so users don't re-download daily.
+name: Runner image
+
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["robustness-calculator/runner/**", ".github/workflows/runner-image.yml"]
+  pull_request:
+    paths: ["robustness-calculator/runner/**", ".github/workflows/runner-image.yml"]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/ckessler2/easynnv-runner
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build with the newest packages
+        working-directory: robustness-calculator/runner
+        run: |
+          docker pull python:3.11-slim  # also recorded in the fingerprint below
+          docker build --pull --no-cache --platform linux/amd64 \
+            --build-arg REVISION="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}" -t candidate .
+
+      - name: Smoke test
+        run: python3 robustness-calculator/runner/smoke_test.py candidate
+
+      - name: Fingerprint the contents
+        id: fingerprint
+        working-directory: robustness-calculator/runner
+        run: |
+          {
+            docker image inspect python:3.11-slim --format '{{index .RepoDigests 0}}'
+            docker run --rm --entrypoint pip candidate freeze
+            cat Dockerfile server.py
+          } > contents.txt
+          cat contents.txt | head -40
+          echo "tag=c-$(sha256sum contents.txt | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish if anything changed
+        if: github.event_name != 'pull_request'
+        env:
+          TAG: ${{ steps.fingerprint.outputs.tag }}
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          if docker manifest inspect "$IMAGE:$TAG" > /dev/null 2>&1; then
+            echo "Nothing changed since the published image ($TAG); not publishing."
+            exit 0
+          fi
+          for tag in "$TAG" "$(date -u +%Y-%m-%d)" latest; do
+            docker tag candidate "$IMAGE:$tag"
+            docker push "$IMAGE:$tag"
+          done

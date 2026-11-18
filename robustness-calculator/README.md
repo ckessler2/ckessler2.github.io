@@ -6,10 +6,11 @@ The page has two tools:
 
 - **rapidNNV** (working): quick verification estimates that run entirely in
   the browser, with no setup. Described below.
-- **VehicleWrapper** (planned): complete verification of
+- **VehicleWrapper** (in progress): complete verification of
   [Vehicle](https://vehicle-lang.readthedocs.io/) specifications with
   Marabou, run by a local runner (a Docker container) behind the same page.
-  The tab describes the proposed design; nothing is implemented yet.
+  The runner is built and tested (see [VehicleWrapper runner](#vehiclewrapper-runner));
+  the tab describes the design but cannot use the runner yet.
 
 ## rapidNNV
 
@@ -146,8 +147,38 @@ src/
   check/     ort-check.js (onnxruntime-web forward pass + self-test)
   worker/    attack-worker.js (owns tf, ort, the model and its layer chain)
   app/, components/, pages/   UI (same structure and styles as ../plate-model)
+runner/      VehicleWrapper's local runner (Python server, Dockerfile, smoke test, example)
 tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
              exact branch and bound); benchmarks/ (crown.js, attack-variants.js, triage.js)
+```
+
+## VehicleWrapper runner
+
+`runner/` holds everything the VehicleWrapper tab will run on your machine.
+Vehicle and Marabou do all the work; the runner only passes jobs to them.
+
+| File | What it is |
+| --- | --- |
+| `server.py` | Local HTTP server (standard library only): runs `vehicle verify`, streams its output, and checks every request (Origin, Host, token, content type) |
+| `Dockerfile` | `python:3.11-slim` plus the newest `vehicle-lang` and `maraboupy`, as an unprivileged user; nothing pinned |
+| `smoke_test.py` | Starts the image hardened, verifies `example/`, checks the request rules and that the runner stops itself |
+| `example/` | `spec.vcl` (one true property, one false) and its 2-input ReLU network `model.onnx` (made by `make-model.js`) |
+
+`../.github/workflows/runner-image.yml` rebuilds the image daily with the
+newest packages, runs the smoke test, and publishes
+`ghcr.io/ckessler2/easynnv-runner` only if it passes and the contents changed.
+
+The runner stops itself when the page goes: a closed tab stops a running job
+within about 4 seconds, and an idle runner stops after 2 minutes without a
+request (or 10 seconds after the page says it is closing). The tab's text
+explains the design and the security measures in full.
+
+To build and test it locally (needs Docker):
+
+```sh
+cd robustness-calculator
+docker build --platform linux/amd64 -t easynnv-runner runner
+python3 runner/smoke_test.py easynnv-runner
 ```
 
 ## Known limitations
