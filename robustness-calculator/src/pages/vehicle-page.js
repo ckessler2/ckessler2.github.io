@@ -99,7 +99,7 @@ function renderRunnerSection() {
 
   if (runner.error && runner.connection !== "wrong-token") body.append(el("p", "error-text", runner.error));
   if (runner.connection === "wrong-token") {
-    body.append(el("p", "", "It was started with a different token. Stop it (Ctrl+C in its terminal) and start it again with the command below."));
+    body.append(el("p", "", "Each browser tab has its own token, so it was probably started from another tab or with an older command. Stop it (Ctrl+C in its terminal) and start it again with the command below."));
   }
   if (runner.connection === "refused") {
     body.append(el("p", "", "It may be an old runner or another program on port 8765. Stop it and start the runner with the command below."));

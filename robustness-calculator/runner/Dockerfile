@@ -5,7 +5,11 @@
 FROM python:3.11-slim
 
 # Pre-built packages only, so no package's install scripts run. No versions pinned: always the newest.
-RUN pip install --no-cache-dir --only-binary=:all: --upgrade vehicle-lang maraboupy \
+# --no-deps: vehicle-lang declares black, pytest and pre-commit (and their dependencies) as
+# requirements, but needs only typing-extensions at run time; every extra package would be one
+# more release that could carry malicious code. The smoke test catches a newly needed dependency.
+RUN pip install --no-cache-dir --only-binary=:all: --upgrade --no-deps \
+      vehicle-lang maraboupy typing-extensions \
  && useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin runner
 
 COPY server.py /app/server.py
@@ -14,7 +18,7 @@ LABEL org.opencontainers.image.source="https://github.com/ckessler2/ckessler2.gi
       org.opencontainers.image.description="easyNNV runner: Vehicle and Marabou behind a local HTTP API"
 
 ARG REVISION=local
-ENV EASYNNV_IMAGE_REVISION=$REVISION HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+ENV EASYNNV_IMAGE_REVISION=$REVISION EASYNNV_CONTAINER=1 HOME=/tmp PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER 10001
 EXPOSE 8765
 ENTRYPOINT ["python", "-I", "/app/server.py"]

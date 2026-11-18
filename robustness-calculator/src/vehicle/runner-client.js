@@ -39,32 +39,42 @@ function storage(kind) {
   }
 }
 
+const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+
+// The token lives in this tab's sessionStorage only: a new one for each tab session, so it is not
+// stored for the whole site, and pages in other tabs cannot read it. It survives a reload.
 function loadToken() {
   try {
-    const saved = storage("localStorage")?.getItem("easynnv-token");
+    const saved = storage("sessionStorage")?.getItem("easynnv-token");
     if (saved && /^[0-9a-f]{32}$/.test(saved)) return saved;
   } catch {
-    /* storage blocked: fall through to a fresh token for this visit */
+    /* storage blocked: fall through to a fresh token for this page */
   }
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  const token = hex(crypto.getRandomValues(new Uint8Array(16)));
   try {
-    storage("localStorage")?.setItem("easynnv-token", token);
+    storage("sessionStorage")?.setItem("easynnv-token", token);
   } catch {
-    /* the token then lasts for this visit only */
+    /* the token then lasts until the page is reloaded */
   }
   return token;
 }
 
 const TOKEN = loadToken();
+// The runner is given only the token's SHA-256, so the token is not in the command, the shell
+// history, the process list or the container (where code running in a job could read it).
+const TOKEN_SHA256 = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(TOKEN))));
+// Identifies this page load, so the runner knows when the last open tab has gone.
+const TAB = hex(crypto.getRandomValues(new Uint8Array(8)));
+const HEADERS = { "X-EasyNNV-Token": TOKEN, "X-EasyNNV-Tab": TAB };
 
 export function startCommand() {
   const origin = window.location.origin;
-  const extraOrigin = origin === SITE_ORIGIN ? "" : ` -e EASYNNV_ORIGINS=${origin}`;
+  // A page served from elsewhere (e.g. a local copy) is allowed explicitly; never "null" (file://).
+  const extraOrigin = origin === SITE_ORIGIN || !/^https?:\/\//.test(origin) ? "" : ` -e EASYNNV_ORIGINS=${origin}`;
   return (
     "docker run --rm --init --pull=always -p 127.0.0.1:8765:8765 --read-only --tmpfs /tmp:size=2g " +
     "--cap-drop=ALL --security-opt=no-new-privileges --memory=4g --cpus=2 --pids-limit=256 " +
-    `-e EASYNNV_TOKEN=${TOKEN}${extraOrigin} ${IMAGE}`
+    `-e EASYNNV_TOKEN_SHA256=${TOKEN_SHA256}${extraOrigin} ${IMAGE}`
   );
 }
 
@@ -84,7 +94,7 @@ function setSessionFlag(on) {
 
 async function fetchStatus() {
   const response = await fetch(`${RUNNER_URL}/status`, {
-    headers: { "X-EasyNNV-Token": TOKEN },
+    headers: HEADERS,
     cache: "no-store",
   });
   if (response.status === 401) throw Object.assign(new Error("wrong token"), { kind: "wrong-token" });
@@ -151,12 +161,13 @@ async function beat() {
   notify();
 }
 
-// Tell the runner the page is closing. sendBeacon cannot set headers, so the token is the body.
+// Tell the runner this tab is closing. sendBeacon cannot set headers, so the token and tab id are
+// the body. The runner stops once no tab is left.
 // The runner waits 10 s before stopping, so a reload reconnects instead (see the end of this file).
 window.addEventListener("pagehide", () => {
   if (runner.connection !== "connected") return;
   try {
-    navigator.sendBeacon(`${RUNNER_URL}/shutdown`, new Blob([TOKEN], { type: "text/plain" }));
+    navigator.sendBeacon(`${RUNNER_URL}/shutdown`, new Blob([`${TOKEN} ${TAB}`], { type: "text/plain" }));
   } catch {
     /* the runner's idle timeout is the backstop */
   }
@@ -204,7 +215,7 @@ export async function runJob(job, onOutput) {
   try {
     const response = await fetch(`${RUNNER_URL}/verify`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "X-EasyNNV-Token": TOKEN },
+      headers: { "Content-Type": "application/json", ...HEADERS },
       body: JSON.stringify(body),
       signal: controller.signal,
     });
@@ -243,6 +254,7 @@ export async function runJob(job, onOutput) {
       runner.job.error = error.message === "Failed to fetch" ? "Could not reach the runner." : error.message;
     }
   } finally {
+    controller?.abort(); // make sure the stream is closed, so the runner stops the job
     controller = null;
     notify();
   }

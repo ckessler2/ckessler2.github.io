@@ -26,6 +26,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false  # nothing later needs git credentials
 
       - name: Build with the newest packages
         working-directory: robustness-calculator/runner
@@ -46,15 +48,18 @@ jobs:
             docker run --rm --entrypoint pip candidate freeze
             cat Dockerfile server.py
           } > contents.txt
-          cat contents.txt | head -40
+          { echo '### Image contents'; echo '```'; cat contents.txt | head -40; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           echo "tag=c-$(sha256sum contents.txt | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
+      # Only main publishes: pull requests and manual runs on other branches just build and test.
       - name: Publish if anything changed
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           TAG: ${{ steps.fingerprint.outputs.tag }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$REGISTRY_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
           if docker manifest inspect "$IMAGE:$TAG" > /dev/null 2>&1; then
             echo "Nothing changed since the published image ($TAG); not publishing."
             exit 0

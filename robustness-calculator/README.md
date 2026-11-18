@@ -162,8 +162,8 @@ tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
 Vehicle and Marabou do all the work; easyNNV only makes them easier to run.
 On the **Run** tab:
 
-1. Start the runner with the command the tab shows (it includes a random
-   token this browser keeps), then press **Connect**. The page contacts
+1. Start the runner with the command the tab shows (it holds the SHA-256 of
+   a random token made for this browser tab), then press **Connect**. The page contacts
    `http://127.0.0.1:8765` only after that, and checks in every 30 seconds.
 2. Write a specification, or press **Load example**. The networks, datasets
    and parameters it declares each get an input.
@@ -176,8 +176,8 @@ the design and the security measures in full.
 
 | File | What it is |
 | --- | --- |
-| `server.py` | Local HTTP server (standard library only): runs `vehicle verify`, streams its output, and checks every request (Origin, Host, token, content type) |
-| `Dockerfile` | `python:3.11-slim` plus the newest `vehicle-lang` and `maraboupy`, as an unprivileged user; nothing pinned |
+| `server.py` | Local HTTP server (standard library only): runs `vehicle verify`, streams its output, and checks every request (Origin, Host, token, tab id, content type); tracks open tabs; kills everything a run started and empties `/tmp` after it |
+| `Dockerfile` | `python:3.11-slim` plus the newest `vehicle-lang`, `maraboupy` and `typing-extensions` (`--no-deps`: nothing else), as an unprivileged user; nothing pinned |
 | `smoke_test.py` | Starts the image hardened, verifies `example/`, checks the request rules and that the runner stops itself |
 | `example/` | `spec.vcl` (one true property, one false) and its 2-input ReLU network `model.onnx` (made by `make-model.js`) |
 
