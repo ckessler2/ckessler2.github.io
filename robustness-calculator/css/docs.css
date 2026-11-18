@@ -1,1 +1,712 @@
-/* docs pages: area-specific styles (shared primitives are in ../style.css). */
+/* docs pages: area-specific styles (shared primitives are in ../style.css).
+   Method pages (rapidNNV, VehicleWrapper) and rapidNNV Results. Built by src/components/docs-*.js. */
+
+/* ---------- Layout: article + sticky "On this page" on wide screens ---------- */
+
+.docs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  min-width: 0;
+}
+
+.docs-aside {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .docs-layout {
+    grid-template-columns: minmax(0, 880px) 210px;
+  }
+
+  .docs-aside {
+    display: block;
+    position: sticky;
+    top: 20px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+  }
+
+  .docs-toc-inline {
+    display: none;
+  }
+}
+
+.docs-article {
+  max-width: none;
+  min-width: 0;
+}
+
+/* ---------- Title and "In short" ---------- */
+
+.docs-title h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.25;
+}
+
+.docs-subtitle {
+  margin: 4px 0 0;
+  color: var(--muted);
+}
+
+.docs-eyebrow {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.page-card p.docs-eyebrow {
+  font-size: var(--font-size-small);
+}
+
+.docs-short {
+  margin: 18px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  display: grid;
+  gap: 10px;
+}
+
+.docs-short > p {
+  margin: 0;
+}
+
+.docs-short .docs-eyebrow {
+  margin: 0;
+}
+
+.docs-short .bullet-list li + li {
+  margin-top: 4px;
+}
+
+/* ---------- Table of contents ---------- */
+
+.docs-toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.docs-toc-link {
+  display: block;
+  width: 100%;
+  padding: 5px 10px;
+  border: 0;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--font-size-small);
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docs-toc-link:hover {
+  color: var(--text);
+  border-left-color: var(--border-strong);
+}
+
+.docs-toc-link.is-current {
+  color: var(--text);
+  font-weight: 700;
+  border-left-color: var(--accent);
+}
+
+.docs-toc-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.docs-toc-side {
+  padding: 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+body[data-theme="dark"] .docs-toc-side {
+  background: rgba(29, 31, 35, 0.96);
+}
+
+.docs-toc-inline {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.docs-toc-inline .docs-toc-list {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  column-gap: 8px;
+}
+
+/* ---------- Sections ---------- */
+
+.docs-section {
+  scroll-margin-top: 16px;
+  padding-top: 6px;
+}
+
+.docs-section + .docs-section {
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.docs-article .docs-section > h2 {
+  margin: 1.1em 0 0.3em;
+  font-size: 1.15rem;
+}
+
+.docs-section > h2:focus {
+  outline: none;
+}
+
+.page-card p.docs-summary {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.docs-h3 {
+  margin: 1.4em 0 0.4em;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.docs-section p {
+  margin: 0.5em 0;
+}
+
+.docs-list li + li {
+  margin-top: 5px;
+}
+
+.docs-list {
+  margin: 0.5em 0;
+}
+
+.docs-section .bullet-list li {
+  line-height: 1.55;
+}
+
+/* ---------- Cards (verdicts, key facts) ---------- */
+
+.docs-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.docs-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.docs-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-card .docs-card p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  line-height: 1.45;
+}
+
+.docs-card[class*="tone-"] .docs-card-title::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+
+.docs-card.tone-certified .docs-card-title::before { background: var(--viz-certified); }
+.docs-card.tone-counterexample .docs-card-title::before { background: var(--viz-counterexample); }
+.docs-card.tone-unknown .docs-card-title::before { background: var(--viz-unknown); }
+
+/* ---------- Definition lists ---------- */
+
+.docs-defs {
+  margin: 0.6em 0;
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
+  column-gap: 16px;
+  row-gap: 8px;
+}
+
+.docs-defs dt {
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.docs-defs dd {
+  margin: 0;
+  line-height: 1.55;
+  min-width: 0;
+}
+
+.docs-defs dt code {
+  font-weight: 400;
+}
+
+.docs-defs.docs-defs-code dt {
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .docs-defs {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 2px;
+  }
+
+  .docs-defs dd + dt {
+    margin-top: 8px;
+  }
+}
+
+/* ---------- Callouts ---------- */
+
+.docs-callout {
+  margin: 0.8em 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+  line-height: 1.55;
+}
+
+.docs-callout.tone-note {
+  border-left-color: var(--border-strong);
+  background: var(--control-fill);
+}
+
+.docs-callout.tone-decision {
+  border-left-color: var(--accent);
+  background: var(--control-fill);
+}
+
+/* ---------- Tables ---------- */
+
+.docs-table-wrap {
+  margin: 0.7em 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.docs-table caption {
+  caption-side: top;
+  padding: 6px 8px;
+  text-align: left;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  border-bottom: 1px solid var(--border);
+}
+
+.docs-table th,
+.docs-table td {
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Prose tables: let text cells wrap on wide screens, scroll on narrow ones. */
+.docs-method .docs-table td,
+.docs-method .docs-table th {
+  white-space: normal;
+  line-height: 1.45;
+}
+
+.docs-method .docs-table {
+  min-width: 560px;
+}
+
+.docs-cell-note {
+  display: block;
+  color: var(--muted);
+}
+
+.docs-ops {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--control-fill);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.docs-ops-label {
+  margin-top: 12px;
+}
+
+/* ---------- Code blocks ---------- */
+
+.docs-code {
+  margin: 0.6em 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--control-fill);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Math: MathJax, or a readable fallback when it cannot load ---------- */
+
+.docs-article .math-block {
+  margin: 0.4em 0;
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+}
+
+.math-fallback {
+  font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", Cambria, "Times New Roman", serif;
+  font-style: normal;
+  line-height: 1.6;
+}
+
+.math-fallback-display {
+  display: block;
+  font-size: 1.08rem;
+  white-space: nowrap;
+}
+
+.math-fallback sub,
+.math-fallback sup {
+  font-size: 0.72em;
+}
+
+.mf-frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  vertical-align: middle;
+  margin: 0 0.15em;
+  line-height: 1.25;
+}
+
+.mf-num {
+  padding: 0 0.2em 0.05em;
+  border-bottom: 1px solid currentColor;
+}
+
+.mf-den {
+  padding: 0.05em 0.2em 0;
+}
+
+.mf-cases {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  gap: 0.25em;
+}
+
+.mf-brace {
+  font-size: 2em;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.mf-cases-rows {
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  column-gap: 1.2em;
+  line-height: 1.35;
+}
+
+.mf-case {
+  display: contents;
+}
+
+/* ---------- Results page ---------- */
+
+.docs-results {
+  max-width: none;
+}
+
+.docs-results .docs-short {
+  margin-top: 14px;
+}
+
+.docs-results-intro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-top: 22px;
+}
+
+.page-card p.docs-results-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.docs-results-panel {
+  margin-top: 14px;
+  display: grid;
+  gap: 18px 28px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+/* Side by side only when the table fits without scrolling sideways. */
+@media (min-width: 1280px) {
+  .docs-results-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  }
+}
+
+.docs-results-col {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  align-content: start;
+}
+
+.docs-results h2 {
+  margin: 0;
+}
+
+.docs-results .docs-h3 {
+  margin: 0 0 8px;
+}
+
+.docs-tiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.docs-tile {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-alt);
+  display: grid;
+  gap: 2px;
+  align-content: start;
+}
+
+.docs-tile-label {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.docs-tile-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.docs-tile-unit {
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.docs-tile-sub {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.docs-results .split-bars {
+  margin: 0;
+}
+
+.docs-figure-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.docs-results .docs-table-wrap {
+  margin: 0;
+  max-height: 560px;
+}
+
+.docs-results .docs-table td:not(:first-child),
+.docs-results .docs-table th:not(:first-child) {
+  text-align: right;
+}
+
+.docs-results .docs-table th {
+  white-space: normal;
+  vertical-align: bottom;
+}
+
+.docs-results .docs-table td {
+  white-space: nowrap;
+}
+
+/* Names may wrap when space is short, so the numbers stay in view. */
+.docs-results .docs-table td:nth-child(-n + 2) {
+  white-space: normal;
+  min-width: 7em;
+}
+
+.docs-results .docs-table td:first-child {
+  min-width: 10em;
+}
+
+.docs-results .docs-table .is-exact {
+  color: var(--muted);
+}
+
+.docs-results .docs-table .is-range {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.docs-results-closing {
+  margin-top: 26px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 8px 32px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 900px) {
+  .docs-results-closing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.docs-results-closing h2 {
+  margin: 1em 0 0.4em;
+  font-size: 1.15rem;
+}
+
+@media (max-width: 520px) {
+  .docs-tile {
+    padding: 8px 10px;
+  }
+
+  .docs-tile-value {
+    font-size: 1.2rem;
+  }
+
+  .docs-title h1 {
+    font-size: 1.25rem;
+  }
+}
+
+/* ---------- Sub-entries in the sidebar table of contents ---------- */
+
+.docs-toc-sublist {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+}
+
+.docs-toc-sublink {
+  display: block;
+  width: 100%;
+  padding: 3px 10px 3px 22px;
+  border: 0;
+  border-left: 2px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-align: left;
+  cursor: pointer;
+}
+
+.docs-toc-sublink:hover {
+  color: var(--text);
+}
+
+.docs-toc-sublink:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.docs-h3 {
+  scroll-margin-top: 16px;
+}
+
+.docs-h3:focus {
+  outline: none;
+}
+
+/* Flags and endpoints: a bounded term column; each flag keeps together but several can wrap. */
+.docs-defs.docs-defs-code {
+  grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+}
+
+.docs-defs-code dt code {
+  white-space: nowrap;
+  line-height: 1.7;
+}
+
+@media (max-width: 640px) {
+  .docs-defs.docs-defs-code {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .docs-defs-code dt code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Results tables: the benchmark name stays visible while the numbers scroll sideways. */
+.docs-results .docs-table td:first-child,
+.docs-results .docs-table th:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--panel);
+  box-shadow: 1px 0 0 var(--border);
+}
+
+.docs-results .docs-table th:first-child {
+  z-index: 2;
+  background: var(--panel-alt);
+}
+
+body[data-theme="dark"] .docs-results .docs-table td:first-child {
+  background: #1d1f23;
+}
+
+/* Stacked results (tablets, narrow desktops): the four tiles in one row. */
+@media (min-width: 760px) and (max-width: 1279px) {
+  .docs-tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}

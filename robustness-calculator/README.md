@@ -219,6 +219,33 @@ These limits are known and accepted for now:
   rapidNNV's worker, so they cannot carry integrity hashes (the worker cannot
   read the token).
 
+### Roadmap
+
+1. **Done:** the runner, its image and the daily build, tested end to end on
+   an example (one property proved, one refuted).
+2. **Done:** the Run tab's first version (Connect, a `.vcl` editor with an
+   example, inputs for the declared networks, datasets and parameters,
+   Verify and Cancel, streamed output).
+3. Testing in Chrome, Firefox and Safari.
+4. VNNLib verifiers: Vehicle can compile specifications to VNNLib queries, so
+   verifiers such as
+   [α,β-CROWN](https://github.com/Verified-Intelligence/alpha-beta-CROWN) can
+   be added to the solver list.
+5. Nicer results: verdicts and counterexamples as tables, and a better editor
+   (Vehicle includes a language server).
+6. A combined mode: rapidNNV reads VNNLib, so it can first try Vehicle's
+   compiled queries in the browser and send only the undecided ones to the
+   runner.
+
+### Open questions
+
+- Browsers treat requests from a public site to your own machine
+  differently. Recent Chrome asks for permission; Safari may block them
+  entirely. To be tested.
+- Marabou cannot express strict inequalities (x < y), so Vehicle relaxes them
+  to x ≤ y and warns. Counterexamples can then sit exactly on a boundary; the
+  Run tab points this out when it happens.
+
 ## Known limitations
 
 The tool is designed to be fast rather than complete. rapidNNV's Results tab ("Where
