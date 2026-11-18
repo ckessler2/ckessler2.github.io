@@ -136,15 +136,15 @@ export function renderVehicleMethodPage() {
         el("strong", "", "Shared site"),
         ": everything under ",
         code("ckessler2.github.io"),
-        " shares one browser origin. A script running on this page, or on another page of the site that opened this tab, could read the secret while the tab is open. Moving easyNNV to its own domain would remove this.",
+        " shares one browser origin. A script running on this page, or on another page of the site that opened this tab, could read the secret while the tab is open. easyNNV will move to its own site later, which removes this; it stays here for now to keep testing simple.",
       ],
       [
         el("strong", "", "Internet access"),
-        ": the container can make outbound connections. Docker cannot block them while still letting the page reach the runner without extra setup. Nothing in the runner uses the network, so only compromised Vehicle or Marabou code could.",
+        ": the container can make outbound connections. Docker cannot block them while still letting the page reach the runner without extra setup. Nothing in the runner uses the network, so only compromised Vehicle or Marabou code could. Blocking it would need a longer start command with extra steps, so this is accepted for now.",
       ],
       [
         el("strong", "", "New releases"),
-        ": the image takes new releases of Vehicle and Marabou within a day, with only an automated test in between. To reduce this, the image installs nothing else: no other package's releases reach your machine.",
+        ": the image takes new releases of Vehicle and Marabou within a day, with only an automated test in between. To reduce this, the image installs nothing else: no other package's releases reach your machine. Waiting a few days before using a new release would catch most malicious ones, but would delay new versions, so it is not done for now.",
       ],
       "The library loaded by rapidNNV's background worker (TensorFlow.js, ONNX Runtime) cannot carry integrity hashes, because it is imported by code; that worker cannot read the secret.",
     ]),

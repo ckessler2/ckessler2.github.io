@@ -201,6 +201,24 @@ When the page is served locally (see below), the start command it shows adds
 `-e EASYNNV_ORIGINS=<that origin>`, since the runner otherwise accepts only
 `https://ckessler2.github.io`.
 
+### Security: known limits
+
+The VehicleWrapper **Method** tab describes the security measures in full.
+These limits are known and accepted for now:
+
+- **Shared origin.** Everything under `ckessler2.github.io` shares one browser
+  origin, so a script on this page, or on another page of the site that
+  opened the easyNNV tab, could read that tab's runner token. easyNNV will
+  move to its own site later.
+- **Outbound network.** The runner container can make outbound connections;
+  blocking them would need a more complex start command.
+- **New releases.** The image takes new Vehicle and Marabou releases within a
+  day, checked only by the smoke test. It installs nothing else (`--no-deps`),
+  and there is no waiting period before new releases are used.
+- **Worker libraries.** TensorFlow.js and ONNX Runtime are imported by code in
+  rapidNNV's worker, so they cannot carry integrity hashes (the worker cannot
+  read the token).
+
 ## Known limitations
 
 The tool is designed to be fast rather than complete. rapidNNV's Results tab ("Where
