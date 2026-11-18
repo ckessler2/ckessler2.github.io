@@ -71,7 +71,7 @@ export function renderVehicleMethodPage() {
           ],
           { ordered: true, className: "docs-steps" },
         ),
-        callout("Reloading or closing the page cancels a running verification, and the runner stops by itself once the page is gone.", "note"),
+        callout("To stop the runner yourself, open the status at the top right and press Disconnect. Reloading or closing the page cancels a running verification, and the runner stops by itself once the page is gone. If the runner stops (its terminal is closed, or Docker quits), the page notices within seconds and shows the setup steps again.", "note"),
       ],
     },
     {
@@ -118,7 +118,8 @@ export function renderVehicleMethodPage() {
         p("Nothing is left running after you close the page, even if the browser crashes."),
         defs([
           ["During a run", "The runner checks every 2 seconds whether the tab is still connected, and stops the verification within a few seconds if it is not."],
-          ["While idle", "Each open tab checks in every 30 seconds. When no tab has checked in for 2 minutes, the runner stops and Docker deletes the container."],
+          ["Disconnect", "The tab tells the runner it is done, as when it closes; the runner stops within 10 seconds unless another tab still uses it."],
+          ["While idle", "Each open tab checks in every 5 seconds. When no tab has checked in for 2 minutes, the runner stops and Docker deletes the container."],
           ["Closing a tab", "The tab tells the runner. Once the last tab has closed, the runner stops within 10 seconds (the delay lets a reloaded page reconnect). Closing one tab never stops another tab's run."],
           ["After every run", "The runner kills every process the run started (including any that tried to detach) and empties its temporary space. Every run also has a time limit."],
         ]),

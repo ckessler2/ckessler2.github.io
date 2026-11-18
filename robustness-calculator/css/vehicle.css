@@ -642,3 +642,9 @@ details.vw-row[open] > summary .vw-row-head::after {
   font-family: var(--font-mono);
   cursor: pointer;
 }
+
+.vw-pill-caret {
+  margin-left: 0.25rem;
+  color: var(--muted);
+  font-size: 0.75em;
+}

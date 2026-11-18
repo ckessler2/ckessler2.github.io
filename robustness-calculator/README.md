@@ -173,7 +173,8 @@ On the **Run** tab:
    declares each get an input, and **Properties** chooses which to verify.
 3. Press **Verify**. Vehicle's output appears as it runs; **Cancel** stops it.
 
-The runner stops by itself when the page closes. The **Method** tab explains
+The runner stops by itself when the page closes, or when you press
+**Disconnect** (in the status menu at the top right). The **Method** tab explains
 the design and the security measures in full.
 
 `runner/` holds everything the tab runs on your machine:

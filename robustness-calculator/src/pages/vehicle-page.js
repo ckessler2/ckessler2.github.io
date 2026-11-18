@@ -7,6 +7,7 @@ import {
   subscribe,
   connect,
   stopConnecting,
+  disconnect,
   startCommand,
   runJob,
   cancelJob,
@@ -403,7 +404,7 @@ function buildToolbar() {
     else if (c === "wrong-token") pill = statusPill("error", "Token refused");
     else if (c === "refused") pill = statusPill("error", "Connection refused");
     else pill = statusPill("idle", "Not connected");
-    pillButton.replaceChildren(pill);
+    pillButton.replaceChildren(pill, el("span", "vw-pill-caret", "▾"));
 
     const parts = [];
     if (c === "connected") {
@@ -411,7 +412,11 @@ function buildToolbar() {
       parts.push(
         el("p", "", `Vehicle ${versionOf(v.vehicle)} · Marabou ${v.maraboupy ?? "?"}`),
         el("p", "vw-muted", `Runner image ${v.image ?? "unknown"}`),
-        el("p", "", "The runner stops when you close this page."),
+        el("p", "", "The runner stops when you close this page, or when you disconnect."),
+        button("Disconnect", {
+          onClick: disconnect,
+          title: isRunning() ? "Cancels the running job" : "Stops the runner unless another easyNNV tab uses it",
+        }),
       );
     } else {
       parts.push(el("p", "", `Runs on your machine. This page talks only to ${RUNNER_URL}, and only after you press Connect.`));
@@ -485,7 +490,8 @@ function buildToolbar() {
 
 function renderSetup() {
   const box = el("div", "vw-setup");
-  const title = el("h3", "vw-pane-title", "Start the runner ");
+  const lost = runner.connection === "lost";
+  const title = el("h3", "vw-pane-title", lost ? "The runner has stopped " : "Start the runner ");
   box.append(title);
   title.append(
     info(
@@ -542,8 +548,12 @@ function renderSetup() {
       el("p", "error-text", "The runner refused the connection."),
       hint("An old runner or another program may be on port 8765. Stop it and run the command above."),
     );
+  } else if (lost) {
+    title.after(hint("Its terminal was closed, or Docker stopped. To keep verifying, start it again:"));
   } else if (runner.error) {
     box.append(el("p", "error-text", runner.error));
+  } else if (runner.notice) {
+    title.after(hint(runner.notice));
   }
   return box;
 }

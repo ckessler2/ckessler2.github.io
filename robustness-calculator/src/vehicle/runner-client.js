@@ -7,7 +7,7 @@
 export const RUNNER_URL = "http://127.0.0.1:8765";
 const SITE_ORIGIN = "https://ckessler2.github.io";
 const IMAGE = "ghcr.io/ckessler2/easynnv-runner";
-const HEARTBEAT_MS = 30_000; // the runner stops after 120 s without a request
+const HEARTBEAT_MS = 5_000; // notices a stopped runner quickly; the runner stops after 120 s without a request
 const CONNECT_RETRY_MS = 2_000; // while the container starts
 const CONNECT_PATIENCE_MS = 120_000;
 const OUTPUT_LIMIT = 2_000_000; // characters of output kept
@@ -16,6 +16,7 @@ const listeners = new Set();
 export const runner = {
   connection: "idle", // idle | connecting | connected | lost | wrong-token | refused
   error: null,
+  notice: null, // a neutral message, e.g. after Disconnect
   info: null, // /status reply: versions, solvers, busy, …
   job: null, // { status: running|done|failed|cancelled, output, outcome, seconds, error }
 };
@@ -108,6 +109,7 @@ export async function connect() {
   clearInterval(heartbeat);
   runner.connection = "connecting";
   runner.error = null;
+  runner.notice = null;
   notify();
   const started = Date.now();
   while (attempt === connectAttempt) {
@@ -154,24 +156,42 @@ async function beat() {
     runner.error =
       error.kind === "wrong-token"
         ? error.message
-        : "Lost the runner. It stops after 2 minutes without this page, or it may have been closed.";
+        : "The runner has stopped (its terminal was closed, or Docker stopped). Start it again to keep verifying.";
+    runner.info = null;
     clearInterval(heartbeat);
     setSessionFlag(false);
   }
   notify();
 }
 
-// Tell the runner this tab is closing. sendBeacon cannot set headers, so the token and tab id are
-// the body. The runner stops once no tab is left.
-// The runner waits 10 s before stopping, so a reload reconnects instead (see the end of this file).
-window.addEventListener("pagehide", () => {
-  if (runner.connection !== "connected") return;
+// Tell the runner this tab is done with it. sendBeacon cannot set headers, so the token and tab id
+// are the body. The runner stops once no tab is left. It waits 10 s first, so a reload reconnects
+// instead (see the end of this file).
+function sendShutdown() {
   try {
     navigator.sendBeacon(`${RUNNER_URL}/shutdown`, new Blob([`${TOKEN} ${TAB}`], { type: "text/plain" }));
   } catch {
     /* the runner's idle timeout is the backstop */
   }
+}
+
+window.addEventListener("pagehide", () => {
+  if (runner.connection === "connected") sendShutdown();
 });
+
+/** Stop using the runner: cancel any job and tell the runner to stop (unless another tab uses it). */
+export function disconnect() {
+  controller?.abort();
+  connectAttempt++;
+  clearInterval(heartbeat);
+  if (runner.connection === "connected") sendShutdown();
+  runner.connection = "idle";
+  runner.info = null;
+  runner.error = null;
+  runner.notice = "Disconnected. The runner stops within 10 seconds, unless another easyNNV tab is using it.";
+  setSessionFlag(false);
+  notify();
+}
 
 // ---- running a job --------------------------------------------------------------------------
 
@@ -253,6 +273,7 @@ export async function runJob(job, onOutput) {
     } else {
       runner.job.status = "failed";
       runner.job.error = error.message === "Failed to fetch" ? "Could not reach the runner." : error.message;
+      if (runner.connection === "connected") beat(); // find out now whether the runner has stopped
     }
   } finally {
     controller?.abort(); // make sure the stream is closed, so the runner stops the job
