@@ -1,1 +1,584 @@
 /* vehicle pages: area-specific styles (shared primitives are in ../style.css). */
+
+/* ---------- Run tab: toolbar, editor beside output ---------- */
+
+.vw-page {
+  gap: 12px;
+}
+
+.vw-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.vw-toolbar .run-button,
+.vw-toolbar .secondary-button {
+  padding: 7px 12px;
+}
+
+.vw-primary {
+  min-width: 92px;
+}
+
+.vw-tool {
+  white-space: nowrap;
+}
+
+.vw-tool.is-missing {
+  box-shadow: inset 0 0 0 1px var(--bad);
+  color: var(--bad);
+}
+
+.vw-needs {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.vw-needs:empty {
+  display: none;
+}
+
+.vw-spacer {
+  flex: 1 1 0;
+}
+
+.vw-pill-button {
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+}
+
+.vw-pill-button:hover .status-pill,
+.vw-pill-button[aria-expanded="true"] .status-pill {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.vw-toolbar .popover-panel {
+  min-width: 240px;
+}
+
+.vw-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.vw-menu-item:hover,
+.vw-menu-item:focus-visible {
+  background: var(--control-fill);
+}
+
+.vw-panel-title,
+.vw-field-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.vw-inputs-panel {
+  display: grid;
+  gap: 8px;
+}
+
+.vw-input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.vw-input-row:has(.vw-param) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.vw-input-name {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.vw-input-file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.vw-input-file.is-missing {
+  color: var(--bad);
+}
+
+.vw-param,
+.vw-number {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+
+.vw-small {
+  padding: 4px 9px !important;
+  font-size: var(--font-size-small);
+}
+
+.vw-muted {
+  color: var(--muted);
+}
+
+.vw-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 55fr) minmax(0, 45fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.vw-editor-wrap {
+  min-width: 0;
+}
+
+.vw-editor {
+  display: block;
+  width: 100%;
+  height: max(60vh, calc(100vh - 230px));
+  min-height: 240px;
+  resize: vertical;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  line-height: 1.5;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow: auto;
+  tab-size: 2;
+}
+
+.vw-editor:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -1px;
+}
+
+.vw-output {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+}
+
+.vw-output > .empty-state {
+  padding: 6px 0;
+}
+
+.vw-pane-title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: 700;
+}
+
+.vw-link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.vw-link-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Runner setup */
+
+.vw-setup {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-setup .error-text,
+.vw-setup .field-hint {
+  margin: 0;
+}
+
+.vw-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: vw-step;
+  display: grid;
+  gap: 12px;
+}
+
+.vw-steps > li {
+  counter-increment: vw-step;
+  position: relative;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+  padding-left: 30px;
+  min-width: 0;
+}
+
+.vw-steps > li::before {
+  content: counter(vw-step);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--control-fill);
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.vw-steps > li:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.vw-command {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+.vw-command-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--control-fill);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: all;
+}
+
+.vw-command-text.is-full {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vw-command .secondary-button {
+  padding: 6px 10px;
+  flex: none;
+}
+
+.vw-command-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: var(--font-size-small);
+  color: var(--muted);
+}
+
+/* Results */
+
+.vw-results {
+  display: grid;
+  gap: 10px;
+}
+
+.vw-results-body {
+  display: grid;
+  gap: 10px;
+  transition: opacity 0.15s;
+}
+
+.vw-results-body.is-stale {
+  opacity: 0.5;
+}
+
+.vw-stale-bar {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--control-fill);
+  font-size: var(--font-size-small);
+}
+
+.vw-headline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.vw-headline .status-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+}
+
+.vw-headline.is-ok { color: var(--ok); }
+.vw-headline.is-error { color: var(--bad); }
+.vw-headline.is-warn { color: var(--warn); }
+.vw-headline.is-idle { color: var(--text); font-weight: 600; }
+.vw-headline.is-ok .status-dot { background: var(--ok); }
+.vw-headline.is-error .status-dot { background: var(--bad); }
+.vw-headline.is-warn .status-dot { background: var(--warn); }
+.vw-headline.is-busy .status-dot {
+  background: var(--accent);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.vw-note {
+  margin: 0;
+  padding: 5px 9px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: 0 6px 6px 0;
+  font-size: var(--font-size-small);
+}
+
+.vw-note-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vw-strict-mark {
+  display: inline-block;
+  min-width: 1.4em;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 700;
+  font-size: var(--font-size-small);
+  text-align: center;
+}
+
+.vw-rows {
+  display: grid;
+  border-top: 1px solid var(--border);
+}
+
+.vw-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.vw-row-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  row-gap: 0;
+  padding: 7px 2px;
+  min-width: 0;
+}
+
+details.vw-row > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+details.vw-row > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.vw-row > summary .vw-row-head::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--muted);
+}
+
+details.vw-row[open] > summary .vw-row-head::after {
+  content: "▾";
+}
+
+.vw-icon {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.vw-icon.is-proved { color: var(--ok); }
+.vw-icon.is-false,
+.vw-icon.is-error { color: var(--bad); }
+.vw-icon.is-timeout,
+.vw-icon.is-unknown { color: var(--warn); }
+.vw-icon.is-running {
+  color: var(--accent);
+  animation: status-pulse 1.2s ease-in-out infinite;
+}
+
+.vw-row-name {
+  font-family: var(--font-mono);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vw-row-label {
+  color: var(--muted);
+}
+
+.vw-row.is-pending .vw-row-name,
+.vw-row.is-skipped .vw-row-name {
+  color: var(--muted);
+}
+
+.vw-values {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 8px 2.1em;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--control-fill);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  overflow-x: auto;
+}
+
+.vw-value {
+  white-space: pre;
+}
+
+.vw-error {
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.vw-error-text {
+  margin: 0;
+  width: 100%;
+  padding: 8px 10px;
+  border-left: 3px solid var(--bad);
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vw-full > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+
+.vw-full[open] > summary {
+  margin-bottom: 6px;
+}
+
+.vw-full-actions {
+  margin-bottom: 6px;
+}
+
+.vw-output-text {
+  margin: 0;
+  max-height: 420px;
+  font-size: var(--font-size-small);
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vw-headline.is-busy .status-dot,
+  .vw-icon.is-running {
+    animation: none;
+  }
+}
+
+/* Phone: editor first, toolbar stays reachable at the top. */
+@media (max-width: 799px) {
+  .vw-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vw-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .vw-editor {
+    height: 50vh;
+  }
+
+  .vw-wide-only {
+    display: none;
+  }
+
+  .vw-output {
+    scroll-margin-top: 110px;
+  }
+}
+
+.vw-steps > li.vw-step-inline {
+  display: block;
+}
+
+.vw-command-meta {
+  column-gap: 14px;
+}
+
+.vw-subrows {
+  margin: 0 0 6px 2.1em;
+  border-top: 0;
+}
+
+.vw-subrows .vw-row:last-child {
+  border-bottom: 0;
+}
+
+/* Grids whose content includes unwrapped text (pre, long names) must not grow past the pane. */
+.vw-output,
+.vw-results,
+.vw-results-body,
+.vw-rows,
+.vw-setup {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.vw-full {
+  min-width: 0;
+}
+
+/* Popover panels size to their content (up to the shared max), then fitPopovers keeps them on screen. */
+.vw-page .popover-panel {
+  width: max-content;
+  max-width: min(300px, calc(100vw - 32px));
+}

@@ -68,6 +68,14 @@ export function createRouter(root, state, worker) {
     const appState = state.getState();
     document.body.dataset.fontMode = appState.useSansSerif ? "sans" : "serif";
     document.body.dataset.theme = appState.useDarkMode ? "dark" : "light";
+    try {
+      localStorage.setItem(
+        "easynnv-display",
+        JSON.stringify({ useDarkMode: appState.useDarkMode, useSansSerif: appState.useSansSerif }),
+      );
+    } catch {
+      /* storage unavailable: the settings last for this visit */
+    }
     root.replaceChildren();
 
     const shell = el("div", "site-shell");

@@ -5,9 +5,20 @@ import { ATTACK_DEFAULTS } from "../attack/defaults.js";
 
 const appRoot = document.getElementById("app");
 
+// Display settings are remembered per browser; the first visit follows the system theme.
+function savedDisplay() {
+  try {
+    return JSON.parse(localStorage.getItem("easynnv-display") ?? "null");
+  } catch {
+    return null;
+  }
+}
+const display = savedDisplay();
+const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+
 const state = createAppState({
-  useSansSerif: true,
-  useDarkMode: false,
+  useSansSerif: display?.useSansSerif ?? true,
+  useDarkMode: display?.useDarkMode ?? prefersDark,
   accordionState: {},
   mode: "points",
   benchmarkId: "cora-mnist-set",

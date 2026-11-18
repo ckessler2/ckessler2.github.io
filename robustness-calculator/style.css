@@ -678,15 +678,6 @@ body[data-theme="dark"] {
   color: var(--ok);
 }
 
-.results-table {
-  max-height: none;
-  margin-bottom: 12px;
-}
-
-.results-table td:first-child {
-  text-align: left;
-}
-
 /* Let wide tables scroll inside their card instead of widening the page. */
 .page-stack > *,
 .prose {
@@ -823,9 +814,6 @@ body[data-theme="dark"] {
   }
 }
 
-/* ---------- VehicleWrapper Run tab ---------- */
-
-.command-box,
 .output-box {
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -834,31 +822,10 @@ body[data-theme="dark"] {
   overflow-wrap: anywhere;
 }
 
-.command-box {
-  margin: 8px 0;
-  user-select: all;
-}
-
 .output-box {
   max-height: 520px;
   overflow: auto;
   white-space: pre-wrap;
-}
-
-.spec-editor {
-  width: 100%;
-  box-sizing: border-box;
-  min-height: 260px;
-  resize: vertical;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-small);
-  line-height: 1.45;
-  tab-size: 2;
 }
 
 .accordion-body .control-stack > p,
@@ -1011,6 +978,7 @@ body[data-theme="dark"] .segmented > .is-active {
   position: absolute;
   z-index: 20;
   top: calc(100% + 6px);
+  width: max-content;
   min-width: 180px;
   max-width: min(300px, 80vw);
   padding: 10px 12px;
