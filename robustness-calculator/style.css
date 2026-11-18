@@ -165,22 +165,33 @@ body[data-theme="dark"] .page-card {
 
 .nav-row {
   display: flex;
-  gap: 10px 28px;
-  flex-wrap: wrap;
-}
-
-.nav-group {
-  display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
 }
 
-.nav-group-label {
+/* Sub-tabs of the active tool: lighter than the tool tabs, marked by an underline. */
+.nav-subtabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.nav-sublink {
+  text-decoration: none;
   color: var(--muted);
-  font-weight: 700;
-  font-size: var(--font-size-small);
-  padding-right: 2px;
+  padding: var(--pad-nav-y) 7px;
+  border-bottom: 2px solid transparent;
+}
+
+.nav-sublink:hover {
+  color: var(--text);
+}
+
+.nav-sublink.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
 }
 
 .nav-link {

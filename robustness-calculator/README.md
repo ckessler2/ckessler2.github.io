@@ -11,8 +11,9 @@ The page has two tools:
   Marabou, run by a local runner (a Docker container) behind the same page.
   See [VehicleWrapper](#vehiclewrapper).
 
-The tabs are grouped by tool: **rapidNNV** (Run, Method, Results) and
-**VehicleWrapper** (Run, Method). Older links (`#/check`, `#/method`,
+The nav has a tab per tool, **rapidNNV** and **VehicleWrapper**; the active
+tool's sub-tabs follow it on the same line (rapidNNV: Run, Method, Results;
+VehicleWrapper: Run, Method). Older links (`#/check`, `#/method`,
 `#/results`) still work.
 
 ## rapidNNV
