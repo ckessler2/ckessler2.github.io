@@ -6,11 +6,14 @@ The page has two tools:
 
 - **rapidNNV** (working): quick verification estimates that run entirely in
   the browser, with no setup. Described below.
-- **VehicleWrapper** (in progress): complete verification of
+- **VehicleWrapper** (first version): complete verification of
   [Vehicle](https://vehicle-lang.readthedocs.io/) specifications with
   Marabou, run by a local runner (a Docker container) behind the same page.
-  The runner is built and tested (see [VehicleWrapper runner](#vehiclewrapper-runner));
-  the tab describes the design but cannot use the runner yet.
+  See [VehicleWrapper](#vehiclewrapper).
+
+The tabs are grouped by tool: **rapidNNV** (Run, Method, Results) and
+**VehicleWrapper** (Run, Method). Older links (`#/check`, `#/method`,
+`#/results`) still work.
 
 ## rapidNNV
 
@@ -24,7 +27,7 @@ exact value ≤ share without a counterexample. On every published VNN-COMP
 benchmark tried (35 settings), the range contains the published result, and
 in 23 it matches exactly. Nothing is
 uploaded and nothing needs installing. The
-original plan is in `robustness_checker_brief.md`; the page's **Method** tab
+original plan is in `robustness_checker_brief.md`; rapidNNV's **Method** tab
 documents the method in full.
 
 Neither half is complete. Certification is sound but has no branch and
@@ -103,7 +106,7 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
 | Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks and 6·10⁻⁶ on the Collins CNNs. The CROWN layer chain matches onnxruntime on the benchmark networks (including convolutions) and ACAS Xu. |
 
-The per-benchmark tables are on the page's **Results** tab (`src/pages/results-page.js`).
+The per-benchmark tables are on rapidNNV's **Results** tab (`src/pages/results-page.js`).
 
 Further scripts in `tests/benchmarks/`:
 
@@ -146,16 +149,29 @@ src/
   spec/      points.js (CSV mode), vnnlib.js (VNNLIB properties), benchmark.js (built-in benchmarks)
   check/     ort-check.js (onnxruntime-web forward pass + self-test)
   worker/    attack-worker.js (owns tf, ort, the model and its layer chain)
+  vehicle/   runner-client.js (VehicleWrapper: connection, heartbeat, streaming a job)
   app/, components/, pages/   UI (same structure and styles as ../plate-model)
 runner/      VehicleWrapper's local runner (Python server, Dockerfile, smoke test, example)
 tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
              exact branch and bound); benchmarks/ (crown.js, attack-variants.js, triage.js)
 ```
 
-## VehicleWrapper runner
+## VehicleWrapper
 
-`runner/` holds everything the VehicleWrapper tab will run on your machine.
-Vehicle and Marabou do all the work; the runner only passes jobs to them.
+Vehicle and Marabou do all the work; easyNNV only makes them easier to run.
+On the **Run** tab:
+
+1. Start the runner with the command the tab shows (it includes a random
+   token this browser keeps), then press **Connect**. The page contacts
+   `http://127.0.0.1:8765` only after that, and checks in every 30 seconds.
+2. Write a specification, or press **Load example**. The networks, datasets
+   and parameters it declares each get an input.
+3. Press **Verify**. Vehicle's output appears as it runs; **Cancel** stops it.
+
+The runner stops by itself when the page closes. The **Method** tab explains
+the design and the security measures in full.
+
+`runner/` holds everything the tab runs on your machine:
 
 | File | What it is |
 | --- | --- |
@@ -170,8 +186,7 @@ newest packages, runs the smoke test, and publishes
 
 The runner stops itself when the page goes: a closed tab stops a running job
 within about 4 seconds, and an idle runner stops after 2 minutes without a
-request (or 10 seconds after the page says it is closing). The tab's text
-explains the design and the security measures in full.
+request (or 10 seconds after the page says it is closing).
 
 To build and test it locally (needs Docker):
 
@@ -181,9 +196,13 @@ docker build --platform linux/amd64 -t easynnv-runner runner
 python3 runner/smoke_test.py easynnv-runner
 ```
 
+When the page is served locally (see below), the start command it shows adds
+`-e EASYNNV_ORIGINS=<that origin>`, since the runner otherwise accepts only
+`https://ckessler2.github.io`.
+
 ## Known limitations
 
-The tool is designed to be fast rather than complete. The Results tab ("Where
+The tool is designed to be fast rather than complete. rapidNNV's Results tab ("Where
 the gaps come from") explains the two gaps in detail.
 
 - **Certification is incomplete.** There is no branch and bound over ReLUs or

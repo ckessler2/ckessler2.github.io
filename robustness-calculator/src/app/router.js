@@ -3,30 +3,25 @@ import { renderCheckPage } from "../pages/check-page.js";
 import { renderMethodPage } from "../pages/method-page.js";
 import { renderResultsPage } from "../pages/results-page.js";
 import { renderVehiclePage } from "../pages/vehicle-page.js";
+import { renderVehicleMethodPage } from "../pages/vehicle-method-page.js";
 import { renderMath } from "./math.js";
 
+// Tabs, in nav order, grouped by tool. The group is shown as a label in the nav.
 const routes = {
-  check: {
-    label: "rapidNNV",
-    render: renderCheckPage,
-  },
-  vehicle: {
-    label: "VehicleWrapper",
-    render: renderVehiclePage,
-  },
-  method: {
-    label: "Method",
-    render: renderMethodPage,
-  },
-  results: {
-    label: "Results",
-    render: renderResultsPage,
-  },
+  rapid: { group: "rapidNNV", label: "Run", render: renderCheckPage },
+  "rapid-method": { group: "rapidNNV", label: "Method", render: renderMethodPage },
+  "rapid-results": { group: "rapidNNV", label: "Results", render: renderResultsPage },
+  vehicle: { group: "VehicleWrapper", label: "Run", render: renderVehiclePage },
+  "vehicle-method": { group: "VehicleWrapper", label: "Method", render: renderVehicleMethodPage },
 };
 
+// Earlier tab names, so old links keep working.
+const aliases = { check: "rapid", method: "rapid-method", results: "rapid-results" };
+
 function resolveRoute() {
-  const routeKey = window.location.hash.replace(/^#\/?/, "") || "check";
-  return routes[routeKey] ? routeKey : "check";
+  const key = window.location.hash.replace(/^#\/?/, "") || "rapid";
+  const routeKey = aliases[key] ?? key;
+  return routes[routeKey] ? routeKey : "rapid";
 }
 
 function createToggle(text, checked, onChange) {

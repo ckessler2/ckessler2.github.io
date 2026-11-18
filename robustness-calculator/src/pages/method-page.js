@@ -31,7 +31,7 @@ export function renderMethodPage({ renderMath }) {
       "Regression has two point-based attack-only checks (standard δ and Lipschitz), and one property mode: an input box (for example a few perturbed sensor readings) with an unsafe condition on the outputs (for example, the prediction leaves a given interval). In the property mode, each property is likewise certified safe, shown unsafe by a counterexample, or left unknown.",
     ),
     para("Everything runs in your browser. Nothing is uploaded; the built-in benchmarks are downloaded from GitHub."),
-    para("How well this works on published benchmarks is shown on the ", link("#/results", "Results"), " tab."),
+    para("How well this works on published benchmarks is shown on the ", link("#/rapid-results", "Results"), " tab."),
 
     el("h2", "", "Certification (CROWN)"),
     para(

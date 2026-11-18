@@ -165,8 +165,22 @@ body[data-theme="dark"] .page-card {
 
 .nav-row {
   display: flex;
+  gap: 10px 28px;
+  flex-wrap: wrap;
+}
+
+.nav-group {
+  display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+.nav-group-label {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: var(--font-size-small);
+  padding-right: 2px;
 }
 
 .nav-link {
@@ -906,4 +920,51 @@ body[data-theme="dark"] {
     grid-template-columns: minmax(0, 1fr);
     gap: 4px;
   }
+}
+
+/* ---------- VehicleWrapper Run tab ---------- */
+
+.command-box,
+.output-box {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--control-fill);
+  overflow-wrap: anywhere;
+}
+
+.command-box {
+  margin: 8px 0;
+  user-select: all;
+}
+
+.output-box {
+  max-height: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.spec-editor {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 260px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  line-height: 1.45;
+  tab-size: 2;
+}
+
+.accordion-body .control-stack > p,
+.accordion-body .control-stack > ol {
+  margin: 0;
+}
+
+.accordion-body .control-stack > ol li + li {
+  margin-top: 6px;
 }

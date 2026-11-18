@@ -1,180 +1,412 @@
-import { el, para, code, link, list } from "../components/prose.js";
+import { createAccordion } from "../components/accordion.js";
+import { createField } from "../components/field.js";
+import { createFileInput, readFileBytes } from "../components/file-input.js";
+import { link } from "../components/prose.js";
+import {
+  RUNNER_URL,
+  runner,
+  subscribe,
+  connect,
+  stopConnecting,
+  startCommand,
+  runJob,
+  cancelJob,
+} from "../vehicle/runner-client.js";
 
-// VehicleWrapper: design, plus the status of each step. The runner exists (runner/ in this
-// folder); this tab's interface to it does not yet.
+// VehicleWrapper Run tab: write a Vehicle specification, give it its networks, datasets and
+// parameters, and verify it with Marabou on the local runner. Vehicle's output is shown as text.
 
-const START_COMMAND =
-  "docker run --rm --init --pull=always -p 127.0.0.1:8765:8765 --read-only --tmpfs /tmp:size=2g " +
-  "--cap-drop=ALL --security-opt=no-new-privileges --memory=4g --cpus=2 --pids-limit=256 " +
-  "-e EASYNNV_TOKEN=<token from this page> ghcr.io/ckessler2/easynnv-runner";
+const form = {
+  specification: "",
+  networks: {}, // name -> { fileName, bytes }
+  datasets: {}, // name -> { fileName, bytes, extension }
+  parameters: {}, // name -> text
+  timeout: 600,
+  exampleLoaded: false,
+  error: null,
+};
 
-function numbered(items) {
-  const ol = el("ol", "bullet-list");
-  for (const item of items) {
-    const li = el("li");
-    if (Array.isArray(item)) li.append(...item);
-    else li.append(item);
-    ol.append(li);
-  }
-  return ol;
+let current = null; // { ctx, page, output } of the latest render
+subscribe(() => {
+  if (current && document.body.contains(current.page)) current.ctx.rerender();
+});
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
-export function renderVehiclePage() {
-  const card = el("article", "page-card prose");
+function accordion(state, key, title, content, defaultOpen = true) {
+  const open = state.getState().accordionState[key] ?? defaultOpen;
+  return createAccordion({ title, content, open, onToggle: (isOpen) => state.setAccordionOpen(key, isOpen) });
+}
 
-  card.append(
+/** Networks, datasets and parameters declared in a specification (comments ignored). */
+export function declarations(specification) {
+  const text = specification.replace(/\{-[\s\S]*?-\}/g, " ").replace(/--.*$/gm, "");
+  const found = { networks: [], datasets: [], parameters: [] };
+  const pattern = /@(network|dataset|parameter)\s*(\([^)]*\))?\s+([A-Za-z_][A-Za-z0-9_']*)\s*:/g;
+  for (const [, kind, options, name] of text.matchAll(pattern)) {
+    if (kind === "parameter" && options && /infer\s*=\s*True/.test(options)) continue; // inferred from data
+    const list = found[`${kind}s`];
+    if (!list.includes(name)) list.push(name);
+  }
+  return found;
+}
+
+async function loadExample(ctx) {
+  try {
+    const [spec, model] = await Promise.all([
+      fetch("./runner/example/spec.vcl").then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.statusText)))),
+      fetch("./runner/example/model.onnx").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.statusText)))),
+    ]);
+    form.specification = spec;
+    form.networks = { f: { fileName: "model.onnx (example)", bytes: new Uint8Array(model) } };
+    form.datasets = {};
+    form.parameters = {};
+    form.error = null;
+  } catch (error) {
+    form.error = `Could not load the example: ${error.message}`;
+  }
+  form.exampleLoaded = true;
+  ctx.rerender();
+}
+
+// ---- left column ----------------------------------------------------------------------------
+
+function renderRunnerSection() {
+  const body = el("div", "control-stack");
+  const status = {
+    idle: "Not connected.",
+    connecting: "Waiting for the runner…",
+    connected: "Connected.",
+    lost: "Disconnected.",
+    "wrong-token": "The runner refused this page's token.",
+    refused: "The runner refused the connection.",
+  }[runner.connection];
+  body.append(el("p", "", status));
+
+  if (runner.connection === "connected") {
+    const v = runner.info.versions;
+    body.append(
+      el("p", "section-note", `Vehicle ${v.vehicle}, Marabou ${v.maraboupy}, image ${v.image}.`),
+      el("p", "section-note", "The runner stops by itself when you close this page."),
+    );
+    return body;
+  }
+
+  if (runner.error && runner.connection !== "wrong-token") body.append(el("p", "error-text", runner.error));
+  if (runner.connection === "wrong-token") {
+    body.append(el("p", "", "It was started with a different token. Stop it (Ctrl+C in its terminal) and start it again with the command below."));
+  }
+  if (runner.connection === "refused") {
+    body.append(el("p", "", "It may be an old runner or another program on port 8765. Stop it and start the runner with the command below."));
+  }
+
+  const steps = el("ol", "bullet-list");
+  const docker = el("li");
+  docker.append("Install and start ", link("https://docs.docker.com/get-started/get-docker/", "Docker"), ".");
+  const command = el("li");
+  const commandText = el("pre", "mono command-box", startCommand());
+  const copy = el("button", "secondary-button", "Copy command");
+  copy.type = "button";
+  copy.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(startCommand());
+      copy.textContent = "Copied";
+    } catch {
+      copy.textContent = "Select the text to copy it";
+    }
+  });
+  command.append("Run this in a terminal. The first start downloads about 700 MB.", commandText, copy);
+  const press = el("li", "", "Press Connect. Your browser may ask whether this site may connect to your device: allow it.");
+  steps.append(docker, command, press);
+  body.append(steps);
+
+  const buttons = el("div", "button-row");
+  if (runner.connection === "connecting") {
+    const stop = el("button", "secondary-button", "Stop waiting");
+    stop.type = "button";
+    stop.addEventListener("click", stopConnecting);
+    buttons.append(stop);
+  } else {
+    const go = el("button", "run-button", "Connect");
+    go.type = "button";
+    go.addEventListener("click", connect);
+    buttons.append(go);
+  }
+  body.append(
+    buttons,
+    el("p", "section-note", `Everything stays on your machine: the page talks only to ${RUNNER_URL}, and only after you press Connect.`),
+  );
+  return body;
+}
+
+function renderSpecificationSection(ctx) {
+  const body = el("div", "control-stack");
+  const area = el("textarea", "spec-editor");
+  area.value = form.specification;
+  area.rows = 18;
+  area.spellcheck = false;
+  area.setAttribute("aria-label", "Vehicle specification (.vcl)");
+  area.placeholder = "Write a Vehicle specification here, or load the example.";
+  let pause = null;
+  area.addEventListener("input", () => {
+    form.specification = area.value;
+    // Update the inputs it declares and the run bar in place, without redrawing the editor.
+    clearTimeout(pause);
+    pause = setTimeout(() => current?.refresh(), 400);
+  });
+
+  const buttons = el("div", "button-row");
+  const example = el("button", "secondary-button", "Load example");
+  example.type = "button";
+  example.addEventListener("click", () => loadExample(ctx));
+  buttons.append(
+    example,
+    createFileInput({
+      accept: ".vcl",
+      label: "Or open a .vcl file",
+      onFile: async (file) => {
+        form.specification = await file.text();
+        ctx.rerender();
+      },
+    }),
+  );
+  body.append(area, buttons);
+  body.append(
+    el("p", "section-note", ""),
+  );
+  body.lastChild.append(
+    "Syntax: see the ",
+    link("https://vehicle-lang.readthedocs.io/", "Vehicle documentation"),
+    ". Networks, datasets and parameters it declares appear under Inputs.",
+  );
+  if (form.error) body.append(el("p", "error-text", form.error));
+  return body;
+}
+
+function renderInputsSection(ctx, found) {
+  const body = el("div", "control-stack");
+  if (!found.networks.length && !found.datasets.length && !found.parameters.length) {
+    body.append(el("p", "section-note", "The specification declares no networks, datasets or parameters yet."));
+  }
+  for (const name of found.networks) {
+    const chosen = form.networks[name];
+    body.append(
+      createFileInput({
+        accept: ".onnx",
+        label: `Network ${name} (.onnx)`,
+        onFile: async (file) => {
+          form.networks[name] = { fileName: file.name, bytes: await readFileBytes(file) };
+          ctx.rerender();
+        },
+      }),
+      el("p", "section-note", chosen ? `Loaded: ${chosen.fileName}` : "Not loaded."),
+    );
+  }
+  for (const name of found.datasets) {
+    const chosen = form.datasets[name];
+    body.append(
+      createFileInput({
+        accept: ".idx,.npy,.csv,.json",
+        label: `Dataset ${name}`,
+        onFile: async (file) => {
+          const extension = (file.name.split(".").pop() ?? "").toLowerCase();
+          form.datasets[name] = { fileName: file.name, bytes: await readFileBytes(file), extension };
+          ctx.rerender();
+        },
+      }),
+      el("p", "section-note", chosen ? `Loaded: ${chosen.fileName}` : "Not loaded."),
+    );
+  }
+  for (const name of found.parameters) {
+    const { wrapper, input } = createField({ name: `param-${name}`, label: `Parameter ${name}`, value: form.parameters[name] ?? "", type: "text" });
+    input.placeholder = "a number, True or False";
+    input.addEventListener("input", () => {
+      form.parameters[name] = input.value.trim();
+    });
+    body.append(wrapper);
+  }
+  return body;
+}
+
+function renderOptionsSection() {
+  const body = el("div", "control-stack");
+  const max = runner.info?.maxTimeout ?? 3600;
+  const { wrapper, input } = createField({ name: "vehicle-timeout", label: "Time limit (seconds)", value: form.timeout });
+  input.min = "1";
+  input.max = String(max);
+  input.addEventListener("change", () => {
+    form.timeout = Math.max(1, Math.min(max, Math.trunc(Number(input.value) || 600)));
+    input.value = String(form.timeout);
+  });
+  body.append(
+    wrapper,
+    el("p", "section-note", `For the whole run, up to ${max} s. The solver is Marabou; more will follow.`),
+  );
+  return body;
+}
+
+// ---- right column ---------------------------------------------------------------------------
+
+function missingInputs(found) {
+  const missing = [];
+  if (!form.specification.trim()) missing.push("a specification");
+  for (const name of found.networks) if (!form.networks[name]) missing.push(`network ${name}`);
+  for (const name of found.datasets) if (!form.datasets[name]) missing.push(`dataset ${name}`);
+  for (const name of found.parameters) if (!form.parameters[name]) missing.push(`parameter ${name}`);
+  return missing;
+}
+
+function renderToolbar(ctx, found) {
+  const panel = el("div", "panel");
+  const row = el("div", "toolbar");
+  const main = el("div", "toolbar-main");
+  const running = runner.job?.status === "running";
+  const missing = missingInputs(found);
+  const connected = runner.connection === "connected";
+
+  const run = el("button", "run-button", running ? "Running…" : "Verify");
+  run.type = "button";
+  run.disabled = running || !connected || missing.length > 0;
+  run.addEventListener("click", () => {
+    found = declarations(form.specification);
+    const pick = (all, names) => Object.fromEntries(names.map((n) => [n, all[n]]));
+    runJob(
+      {
+        specification: form.specification,
+        networks: pick(form.networks, found.networks),
+        datasets: pick(form.datasets, found.datasets),
+        parameters: pick(form.parameters, found.parameters),
+        timeout: form.timeout,
+      },
+      () => current?.output && (current.output.textContent = displayText(runner.job.output)),
+    );
+  });
+  main.append(run);
+  if (running) {
+    const cancel = el("button", "secondary-button", "Cancel");
+    cancel.type = "button";
+    cancel.addEventListener("click", cancelJob);
+    main.append(cancel);
+  }
+
+  let status;
+  if (!connected) status = "Connect to the runner first (Runner, on the left).";
+  else if (missing.length) status = `Still needed: ${missing.join(", ")}.`;
+  else if (running) status = "Vehicle is compiling the specification and Marabou is checking it…";
+  else status = "Ready.";
+  const statusBox = el("div", "toolbar-status");
+  statusBox.append(el("p", "status", status));
+  row.append(main, statusBox);
+  panel.append(row);
+  return panel;
+}
+
+/** Vehicle redraws progress bars with carriage returns; keep only what was drawn last. */
+function displayText(output) {
+  return output
+    .trimStart()
+    .split("\n")
+    .map((line) => line.split("\r").pop())
+    .join("\n");
+}
+
+function renderOutput(ctx) {
+  const job = runner.job;
+  const panel = el("div", "control-stack");
+  const outcome = {
+    running: "Running.",
+    cancelled: "Cancelled. The runner stops the verification within a few seconds.",
+    failed: `Failed: ${job.error}`,
+  }[job.status];
+  if (job.status === "done") {
+    const text =
+      job.outcome === "timeout"
+        ? `Stopped at the time limit after ${job.seconds} s.`
+        : job.outcome === "cancelled"
+          ? "Cancelled because the page was closing."
+          : job.exitCode === 0
+            ? `Finished in ${job.seconds} s.`
+            : `Vehicle stopped with an error (exit code ${job.exitCode}) after ${job.seconds} s. Its message is below.`;
+    panel.append(el("p", job.outcome === "finished" && job.exitCode === 0 ? "" : "error-text", text));
+  } else {
+    panel.append(el("p", job.status === "failed" ? "error-text" : "", outcome));
+  }
+  if (job.status === "done" && /strict inequalit/i.test(job.output)) {
+    panel.append(
+      el(
+        "p",
+        "warning-box",
+        "Marabou cannot express strict inequalities (x < y), so Vehicle relaxed them to x ≤ y. A counterexample may then lie exactly on a boundary of the property.",
+      ),
+    );
+  }
+  const output = el("pre", "mono output-box", displayText(job.output) || "(no output yet)");
+  current.output = output;
+  panel.append(output);
+  const group = el("div", "accordion-group");
+  group.append(accordion(ctx.state, "vehicle-output", "Vehicle output", panel));
+  return group;
+}
+
+function renderIntro() {
+  const panel = el("div", "panel");
+  panel.append(
     el(
       "p",
-      "warning-box",
-      "In progress. The local runner is built and tested; this tab cannot use it yet. The working tool is the rapidNNV tab.",
+      "",
+      "Complete verification with Vehicle and Marabou, running in a container on your own machine. Write a Vehicle specification, give it its networks, and press Verify: each property is proved, or refuted with a counterexample, unless it runs out of time.",
     ),
-
-    el("h2", "", "Aim"),
-    para(
-      "rapidNNV is fast but incomplete: some points and properties stay unknown. VehicleWrapper adds complete verification behind the same browser interface. You write a specification in the ",
-      link("https://vehicle-lang.readthedocs.io/", "Vehicle"),
-      " language, and Vehicle checks it with the ",
-      link("https://github.com/NeuralNetworkVerification/Marabou", "Marabou"),
-      " verifier: each property is proved, or refuted with a counterexample, unless it runs out of time.",
-    ),
-    para(
-      "It is a wrapper, not a reimplementation: Vehicle and Marabou do all the work, unchanged, and this page only makes them easier to run. You never need to install Python or either tool yourself.",
-    ),
-
-    el("h2", "", "Where the computation runs"),
-    para(
-      "Complete verifiers are native programs that can run for minutes or hours, too heavy for a browser tab. They run in a local runner instead: a Docker container on your own machine, holding Vehicle, Marabou and a small web server. The page talks to it at ",
-      code("http://127.0.0.1:8765"),
-      ".",
-    ),
-    list([
-      "Setup is Docker plus one command, which this page shows with a copy button.",
-      "Models and specifications never leave your machine.",
-      "Verifiers run natively, at full speed.",
-    ]),
-
-    el("h3", "", "The runner lives and dies with this tab"),
-    para("Nothing is left running after you close the page, even if the browser crashes:"),
-    list([
-      "During a run, the runner sends a small message every 2 seconds. If the tab has gone, sending fails and the runner stops the verification within about 4 seconds.",
-      "When idle, the page checks in regularly. If it has not heard from the page for 2 minutes, the runner stops, and Docker deletes the container.",
-      "When the tab closes normally, the page tells the runner, which stops within 10 seconds. The delay lets a reloaded page reconnect instead.",
-      "Each verification runs as a process group, so stopping it also stops Marabou. Every run also has a time limit.",
-    ]),
-    para("Reloading the page or closing it cancels a running verification."),
-
-    el("h2", "", "Starting the runner"),
-    para("The page will show this command with your token filled in:"),
-    el("pre", "mono", START_COMMAND),
-    list([
-      [code("--pull=always"), ": fetches the newest runner image each time."],
-      [code("--init --rm"), ": processes are cleaned up and the container is deleted when it stops."],
-      [code("-p 127.0.0.1:8765:8765"), ": only your own machine can connect, not your network."],
-      [
-        code("--read-only --tmpfs …"),
-        ", ",
-        code("--cap-drop=ALL"),
-        ", ",
-        code("--security-opt=no-new-privileges"),
-        ": the container cannot change its own files or gain privileges.",
-      ],
-      [code("--memory --cpus --pids-limit"), ": caps on the resources it can use (adjustable)."],
-      [code("EASYNNV_TOKEN"), ": a random secret this page generates and keeps; requests without it are refused."],
-    ]),
-
-    el("h2", "", "Always the newest versions"),
-    para(
-      "No versions are pinned. A GitHub Action rebuilds the runner image every day with the newest Vehicle, Marabou and base image, runs an example verification and the security checks, and publishes the image only if they pass and something has changed. ",
-      code("--pull=always"),
-      " then gives you the newest image each time you start the runner. The page shows the versions that ran.",
-    ),
-    list([
-      "The image is about 700 MB, downloaded in full the first time and again only when something in it changes.",
-      "Vehicle and Marabou publish Linux builds for x86 only, so on Apple Silicon Macs the image runs under emulation: it works, but more slowly.",
-      "Marabou's newest packaged release is 2.0.0 (April 2024), built for Python 3.8–3.11. Vehicle needs 3.10 or later, so the image uses Python 3.11.",
-      "Docker itself is updated by Docker Desktop, or by your system's package manager on Linux.",
-    ]),
-
-    el("h2", "", "Security"),
-    para(
-      "The runner runs programs on your machine at the request of a web page, so it only accepts requests that are clearly from this page, and limits what a request can do.",
-    ),
-    el("h3", "", "Other websites"),
-    para(
-      "While the runner is up, any page open in your browser can send it requests, and CORS does not stop a request from running, only another site reading the reply. So every request is checked before any work is done:",
-    ),
-    list([
-      [el("strong", "", "Origin"), ": must be this site. Requests with no Origin are refused."],
-      [
-        el("strong", "", "Host"),
-        ": must be ",
-        code("127.0.0.1:8765"),
-        " or ",
-        code("localhost:8765"),
-        ". This defeats DNS rebinding, where another site's domain is switched to point at your machine.",
-      ],
-      [el("strong", "", "Token"), ": the secret from the start command, sent in a custom header (which also forces the browser to check with the runner before sending)."],
-      [el("strong", "", "Content type"), ": jobs must be JSON; form-style posts are refused."],
-    ]),
-    el("h3", "", "Malicious specifications or models"),
-    para("Vehicle and Marabou read the files you give them. If a file came from someone else, the container is the wall:"),
-    list([
-      "No folders from your machine are mounted. Files are sent to the runner, kept in a temporary folder, and deleted after each run.",
-      "The runner runs as an unprivileged user, on a read-only filesystem, with all Linux privileges dropped and resources capped.",
-      "Commands are fixed. The runner builds the Vehicle command itself, never through a shell; the solver is chosen from a fixed list; no extra solver options are accepted; names must be plain identifiers; and the runner picks every file name, so none can point outside the temporary folder.",
-      "One run at a time, a 200 MB upload limit and a time limit per run.",
-    ]),
-    el("h3", "", "This page"),
-    list([
-      "The runner's output is shown as plain text, never as HTML, so a crafted file cannot run script on this site.",
-      "A Content Security Policy will limit the page's connections to this site, its CDNs and the local runner.",
-    ]),
-
-    el("h2", "", "Runner interface"),
-    list([
-      [code("GET /status"), ": versions, available solvers, and whether a run is in progress. The page calls it regularly, which keeps the runner alive."],
-      [
-        code("POST /verify"),
-        ": the specification, networks (ONNX), datasets, parameters, property names, solver and time limit, as JSON. The reply streams Vehicle's output line by line, then the outcome (finished, timed out or cancelled).",
-      ],
-      [code("POST /shutdown"), ": the page is closing."],
-    ]),
-    para(
-      "The solver is named in each request, so more can be added without changing the interface. If no runner is found, the page shows how to start one and offers the rapidNNV tab instead.",
-    ),
-
-    el("h2", "", "First version of this tab"),
-    list([
-      "Runner detection, the start command with its token, and the versions in use.",
-      [
-        "A plain text box for the ",
-        code(".vcl"),
-        " specification, preloaded with a working example and its model.",
-      ],
-      "File inputs for networks and datasets, fields for parameters, a time limit, Run and Cancel.",
-      "Vehicle's output as plain text, as it arrives.",
-    ]),
-
-    el("h2", "", "Steps"),
-    numbered([
-      [el("strong", "", "Done"), ": the runner, its image and the daily build, tested end to end on an example (one property proved, one refuted)."],
-      "This tab's first version, as above.",
-      "Testing in Chrome, Firefox and Safari.",
-      [
-        "VNNLib verifiers: Vehicle can compile specifications to VNNLib queries, so verifiers such as ",
-        link("https://github.com/Verified-Intelligence/alpha-beta-CROWN", "α,β-CROWN"),
-        " can be added to the solver list.",
-      ],
-      "Nicer results: verdicts and counterexamples as tables, and a better editor (Vehicle includes a language server).",
-      "A combined mode: rapidNNV reads VNNLib, so it can first try Vehicle's compiled queries in the browser and send only the undecided ones to the runner.",
-    ]),
-
-    el("h2", "", "Open questions"),
-    list([
-      "Browsers treat requests from a public site to your own machine differently. Recent Chrome asks for permission; Safari may block them entirely. To be tested.",
-      "Marabou cannot express strict inequalities (x < y), so Vehicle relaxes them to x ≤ y and warns. Counterexamples can then sit exactly on a boundary. The page should show that warning clearly.",
-    ]),
+    el("p", "section-note", ""),
   );
+  panel.lastChild.append(
+    "Start with the example: connect the runner, press Load example, then Verify. How it works and how it is secured is on the ",
+    link("#/vehicle-method", "Method"),
+    " tab.",
+  );
+  return panel;
+}
 
-  return card;
+export function renderVehiclePage(ctx) {
+  if (!form.exampleLoaded && !form.specification) loadExample(ctx);
+  const found = declarations(form.specification);
+
+  const page = el("section", "page-flow");
+  current = { ctx, page, output: null };
+  const layout = el("div", "sim-layout");
+
+  const inputs = el("div");
+  const toolbar = el("div");
+  inputs.append(renderInputsSection(ctx, found));
+  toolbar.append(renderToolbar(ctx, found));
+  let shown = JSON.stringify(found);
+  current.refresh = () => {
+    const now = declarations(form.specification);
+    if (JSON.stringify(now) !== shown) {
+      shown = JSON.stringify(now);
+      inputs.replaceChildren(renderInputsSection(ctx, now));
+    }
+    toolbar.replaceChildren(renderToolbar(ctx, now));
+  };
+
+  const controls = el("div", "control-stack");
+  const group = el("div", "accordion-group");
+  group.append(
+    accordion(ctx.state, "vehicle-runner", "Runner", renderRunnerSection(), true),
+    accordion(ctx.state, "vehicle-spec", "Specification", renderSpecificationSection(ctx)),
+    accordion(ctx.state, "vehicle-inputs", "Inputs", inputs),
+    accordion(ctx.state, "vehicle-options", "Options", renderOptionsSection(), false),
+  );
+  controls.append(group);
+
+  const results = el("div", "results-stack");
+  results.append(toolbar, runner.job ? renderOutput(ctx) : renderIntro());
+
+  layout.append(controls, results);
+  page.append(layout);
+  return page;
 }
