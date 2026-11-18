@@ -1,4 +1,4 @@
-// Building blocks for the documentation pages (rapidNNV Method and Results, VehicleWrapper Method):
+// Building blocks for the documentation pages (Estimate Method and Results, Verify Method):
 // a page with an "On this page" table of contents, sections that open with a one-sentence summary,
 // an "In short" box, small cards, definition lists and scrolling tables. Styles: css/docs.css.
 
@@ -119,7 +119,7 @@ function tocList(sections, onPick, withSubs = false) {
  * sections: [{ id, title, toc?, summary, body: [nodes] }]; the summary is the section's first, plain-words sentence.
  * tocDepth 2 also lists each section's sub-headings (h3.docs-h3) in the sidebar.
  * The table of contents is sticky on the right on wide screens and sits under the header on narrow ones.
- * Links scroll with scrollIntoView, so the hash route (#/rapid-method…) is never changed.
+ * Links scroll with scrollIntoView, so the hash route (#/estimate-method…) is never changed.
  */
 export function docsPage({ header = [], sections, className = "", tocDepth = 1 }) {
   const layout = el("div", `docs-layout ${className}`.trim());

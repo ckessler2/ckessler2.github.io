@@ -1,4 +1,4 @@
-// Talks to the local VehicleWrapper runner (runner/server.py). Module state, so a connection and a
+// Talks to the local Verify runner (runner/server.py). Module state, so a connection and a
 // running job survive re-renders and tab switches; the runner stays alive while this page is open.
 //
 // The page only contacts the runner after the user presses Connect (browsers may ask permission
@@ -193,7 +193,7 @@ function append(text) {
 
 /**
  * job: { specification, networks: {name: {bytes}}, datasets: {name: {bytes, extension}},
- *        parameters: {name: value}, timeout }
+ *        parameters: {name: value}, properties: [names; empty = all], timeout }
  */
 export async function runJob(job, onOutput) {
   if (runner.job?.status === "running") return;
@@ -210,6 +210,7 @@ export async function runJob(job, onOutput) {
       Object.entries(job.datasets).map(([name, f]) => [name, { data: bytesToBase64(f.bytes), extension: f.extension }]),
     ),
     parameters: job.parameters,
+    properties: job.properties ?? [],
   };
   controller = new AbortController();
   try {

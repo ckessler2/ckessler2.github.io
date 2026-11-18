@@ -44,7 +44,7 @@ const state = createAppState({
     backend: "webgl",
   },
   run: { status: "idle", result: null, error: null, progress: null },
-  // rapidNNV Run page view state.
+  // Estimate Run page view state.
   rapid: {
     source: "benchmark", // "benchmark" | "files"
     loadedBenchmark: null, // id of the benchmark whose files are loaded, if any

@@ -219,14 +219,12 @@ body[data-theme="dark"] .rf-control select {
   cursor: pointer;
 }
 
-.rapid-source .segmented,
-.rapid-preset {
+.rapid-source .segmented {
   display: flex;
   width: 100%;
 }
 
-.rapid-source .segmented > button,
-.rapid-preset > button {
+.rapid-source .segmented > button {
   flex: 1 1 0;
 }
 

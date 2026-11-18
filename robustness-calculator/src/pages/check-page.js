@@ -1,4 +1,4 @@
-// rapidNNV Run tab (#/rapid): set up a check, run it in the worker, and show
+// Estimate Run tab (#/estimate): set up a check, run it in the worker, and show
 // the answer first with every detail one click away. Styles: css/rapid.css.
 
 import { readFileBytes, gunzip, stripGz } from "../components/file-input.js";
@@ -17,7 +17,7 @@ import { disclaimerFor } from "../attack/report.js";
 import { ATTACK_DEFAULTS, attackDefaultsFor } from "../attack/defaults.js";
 import { TFJS_VERSION, ORT_VERSION } from "../lib/cdn.js";
 
-const METHOD = "#/rapid-method";
+const METHOD = "#/estimate-method";
 
 // DOM nodes updated in place (progress, status, "changed" markers) without a
 // full re-render, so typing in a field never loses focus. Reassigned on every
@@ -28,35 +28,16 @@ let tracker = createProgressTracker();
 const openRows = new Set();
 
 // ---------------------------------------------------------------------------
-// Attack strength presets. Standard = the defaults in attack/defaults.js.
+// Attack settings: the defaults per property type (attack/defaults.js); change them under Advanced.
 
-const PRESETS = {
-  points: {
-    quick: { restarts: 3, steps: 20 },
-    standard: { restarts: ATTACK_DEFAULTS.points.restarts, steps: ATTACK_DEFAULTS.points.steps },
-    thorough: { restarts: 50, steps: 200 },
-  },
-  properties: {
-    quick: { restarts: 50, steps: 50 },
-    standard: { restarts: ATTACK_DEFAULTS.properties.restarts, steps: ATTACK_DEFAULTS.properties.steps },
-    thorough: { restarts: 1000, steps: 300 },
-  },
+const standardAttack = (task) => {
+  const d = attackDefaultsFor(task);
+  return { restarts: d.restarts, steps: d.steps };
 };
-const PRESET_NAMES = { quick: "Quick", standard: "Standard", thorough: "Thorough" };
-const presetSet = (task) => PRESETS[task === "properties" ? "properties" : "points"];
 
-function currentPreset(s) {
-  const a = s.attack;
-  if (a.schedule !== "apgd") return "custom";
-  const set = presetSet(s.pointsSettings.task);
-  return Object.keys(set).find((k) => set[k].restarts === a.restarts && set[k].steps === a.steps) ?? "custom";
-}
-
-/** Attack settings for a new robustness type: keep the chosen preset (Custom → Standard). */
+/** Attack settings for a new property type: its defaults. */
 function attackFor(s, task) {
-  const preset = currentPreset(s);
-  const values = presetSet(task)[preset === "custom" ? "standard" : preset];
-  return { ...values, schedule: "apgd", selfTestSamples: attackDefaultsFor(task).selfTestSamples };
+  return { ...standardAttack(task), schedule: "apgd", selfTestSamples: attackDefaultsFor(task).selfTestSamples };
 }
 
 // ---------------------------------------------------------------------------
@@ -80,13 +61,11 @@ function advancedDiffs(s) {
     check("domainLo", ps.domainLoText.trim(), dom.lo);
     check("domainHi", ps.domainHiText.trim(), dom.hi);
   }
-  if (currentPreset(s) === "custom") {
-    const std = presetSet(task).standard;
-    check("restarts", a.restarts, std.restarts);
-    check("steps", a.steps, std.steps);
-    check("schedule", a.schedule, "apgd");
-    if (a.schedule === "constant") check("alpha", a.alpha, "");
-  }
+  const std = standardAttack(task);
+  check("restarts", a.restarts, std.restarts);
+  check("steps", a.steps, std.steps);
+  check("schedule", a.schedule, "apgd");
+  if (a.schedule === "constant") check("alpha", a.alpha, "");
   check("seed", a.seed, 0);
   check("backend", a.backend, "webgl");
   check("selfTestSamples", a.selfTestSamples, attackDefaultsFor(task).selfTestSamples);
@@ -97,7 +76,7 @@ function resetAdvanced(state) {
   const s = state.getState();
   const task = s.pointsSettings.task;
   state.patch("attack", {
-    ...presetSet(task).standard,
+    ...standardAttack(task),
     schedule: "apgd",
     alpha: "",
     seed: 0,
@@ -524,27 +503,6 @@ function renderFileSource(ctx, s) {
   return out;
 }
 
-function presetControl(ctx) {
-  const { state } = ctx;
-  const s = state.getState();
-  const current = currentPreset(s);
-  const set = presetSet(s.pointsSettings.task);
-  const options = Object.keys(set).map((k) => ({ value: k, label: PRESET_NAMES[k] }));
-  if (current === "custom") options.push({ value: "custom", label: "Custom" });
-  const control = segmented({
-    label: "Attack strength",
-    value: current,
-    options,
-    onChange: (v) => {
-      if (v === "custom") return;
-      state.patch("attack", { ...set[v], schedule: "apgd" });
-      ctx.rerender();
-    },
-  });
-  control.classList.add("rapid-preset");
-  return control;
-}
-
 function renderSetup(ctx) {
   const { state, rerender } = ctx;
   const s = state.getState();
@@ -633,19 +591,6 @@ function renderSetup(ctx) {
     }
     flow.append(params);
   }
-
-  const std = presetSet(ps.task);
-  const strength = fieldRow({
-    label: "Attack strength",
-    info: infoTip(
-      `Random restarts × PGD steps for each ${ps.task === "properties" ? "property region" : "point"}: Quick ${std.quick.restarts}×${std.quick.steps}, Standard ${std.standard.restarts}×${std.standard.steps}, Thorough ${std.thorough.restarts}×${std.thorough.steps}. Stronger attacks find more counterexamples but take longer. Editing restarts, steps or schedule under Advanced makes it Custom.`,
-      { align: "end" },
-    ),
-    stacked: true,
-    control: (live.preset = el("div", "rapid-preset-slot")),
-  });
-  live.preset.append(presetControl(ctx));
-  flow.append(strength);
 
   card.append(flow, renderAdvanced(ctx));
   return card;
@@ -869,7 +814,6 @@ function updateProgress() {
 function softRefresh(ctx) {
   const s = ctx.state.getState();
   fillToolbar(ctx);
-  if (live.preset) live.preset.replaceChildren(presetControl(ctx));
   if (live.advState) live.advState.textContent = advancedStateText(s);
   if (live.advReset) live.advReset.hidden = advancedDiffs(s).length === 0;
   updateStale(ctx);

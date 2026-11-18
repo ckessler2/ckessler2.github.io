@@ -197,10 +197,10 @@ export function renderResultsPage() {
   const instances = c.instances + r.instances;
 
   card.append(
-    pageTitle("Results", "rapidNNV against the published verdicts of the VNN-COMP complete verifiers, on the built-in benchmarks."),
+    pageTitle("Results", "Estimate against the published verdicts of the VNN-COMP complete verifiers, on the built-in benchmarks."),
     inShort(
       bullets([
-        [el("strong", "", "No contradictions. "), `Across ${instances} instances in ${cases} benchmark cases, every verdict rapidNNV reaches agrees with the published one.`],
+        [el("strong", "", "No contradictions. "), `Across ${instances} instances in ${cases} benchmark cases, every verdict Estimate reaches agrees with the published one.`],
         [
           el("strong", "", `Exact in ${c.exact + r.exact} of ${cases} cases `),
           `(classification ${c.exact}/${c.cases}, regression ${r.exact}/${r.cases}), often in seconds to about a minute. Elsewhere the range is wider but contains the published answer.`,

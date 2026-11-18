@@ -1,4 +1,4 @@
-// Compact form rows for the rapidNNV Run page: a short label (with optional ⓘ),
+// Compact form rows for the Estimate Run page: a short label (with optional ⓘ),
 // the control, and at most one hint line. Styles: css/rapid.css (.rf-*).
 
 import { el, popover } from "./ui.js";

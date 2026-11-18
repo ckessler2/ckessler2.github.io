@@ -4,19 +4,19 @@
 
 The page has two tools:
 
-- **rapidNNV** (working): quick verification estimates that run entirely in
+- **Estimate** (working): quick verification estimates that run entirely in
   the browser, with no setup. Described below.
-- **VehicleWrapper** (first version): complete verification of
+- **Verify** (first version): complete verification of
   [Vehicle](https://vehicle-lang.readthedocs.io/) specifications with
   Marabou, run by a local runner (a Docker container) behind the same page.
-  See [VehicleWrapper](#vehiclewrapper).
+  See [Verify](#verify).
 
-The nav has a tab per tool, **rapidNNV** and **VehicleWrapper**; the active
-tool's sub-tabs follow it on the same line (rapidNNV: Run, Method, Results;
-VehicleWrapper: Run, Method). Older links (`#/check`, `#/method`,
-`#/results`) still work.
+The nav has a tab per tool, **Estimate** and **Verify**; the active
+tool's sub-tabs follow it on the same line (Estimate: Run, Method, Results;
+Verify: Run, Method). Older links (`#/check`, `#/method`, `#/results`, `#/rapid…`, `#/vehicle…`)
+still work.
 
-## rapidNNV
+## Estimate
 
 A static, client-side tool that checks the robustness of ONNX networks: ε-ball
 robustness of classifiers, and published-style regression properties (an
@@ -28,7 +28,7 @@ exact value ≤ share without a counterexample. On every published VNN-COMP
 benchmark tried (35 settings), the range contains the published result, and
 in 23 it matches exactly. Nothing is
 uploaded and nothing needs installing. The
-original plan is in `robustness_checker_brief.md`; rapidNNV's **Method** tab
+original plan is in `robustness_checker_brief.md`; Estimate's **Method** tab
 documents the method in full.
 
 Neither half is complete. Certification is sound but has no branch and
@@ -107,7 +107,7 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
 | Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks and 6·10⁻⁶ on the Collins CNNs. The CROWN layer chain matches onnxruntime on the benchmark networks (including convolutions) and ACAS Xu. |
 
-The per-benchmark tables are on rapidNNV's **Results** tab (`src/pages/results-page.js`).
+The per-benchmark tables are on Estimate's **Results** tab (`src/pages/results-page.js`).
 
 Further scripts in `tests/benchmarks/`:
 
@@ -150,14 +150,14 @@ src/
   spec/      points.js (CSV mode), vnnlib.js (VNNLIB properties), benchmark.js (built-in benchmarks)
   check/     ort-check.js (onnxruntime-web forward pass + self-test)
   worker/    attack-worker.js (owns tf, ort, the model and its layer chain)
-  vehicle/   runner-client.js (VehicleWrapper: connection, heartbeat, streaming a job)
+  vehicle/   runner-client.js (Verify: connection, heartbeat, streaming a job)
   app/, components/, pages/   UI (same structure and styles as ../plate-model)
-runner/      VehicleWrapper's local runner (Python server, Dockerfile, smoke test, example)
+runner/      Verify's local runner (Python server, Dockerfile, smoke test, example)
 tests/       node:test suites; helpers/ (ONNX writer, seeded toy classifier,
              exact branch and bound); benchmarks/ (crown.js, attack-variants.js, triage.js)
 ```
 
-## VehicleWrapper
+## Verify
 
 Vehicle and Marabou do all the work; easyNNV only makes them easier to run.
 On the **Run** tab:
@@ -165,8 +165,12 @@ On the **Run** tab:
 1. Start the runner with the command the tab shows (it holds the SHA-256 of
    a random token made for this browser tab), then press **Connect**. The page contacts
    `http://127.0.0.1:8765` only after that, and checks in every 30 seconds.
-2. Write a specification, or press **Load example**. The networks, datasets
-   and parameters it declares each get an input.
+2. Write a specification, or choose an example under **Open**: the built-in
+   tiny network, or Vehicle's own wind controller, ACAS Xu and MNIST
+   robustness examples (fetched from github.com/vehicle-lang/vehicle at a
+   pinned commit when chosen; nothing is hosted here; see
+   `src/vehicle/examples.js`). The networks, datasets and parameters it
+   declares each get an input, and **Properties** chooses which to verify.
 3. Press **Verify**. Vehicle's output appears as it runs; **Cancel** stops it.
 
 The runner stops by itself when the page closes. The **Method** tab explains
@@ -203,7 +207,7 @@ When the page is served locally (see below), the start command it shows adds
 
 ### Security: known limits
 
-The VehicleWrapper **Method** tab describes the security measures in full.
+The Verify **Method** tab describes the security measures in full.
 These limits are known and accepted for now:
 
 - **Shared origin.** Everything under `ckessler2.github.io` shares one browser
@@ -216,7 +220,7 @@ These limits are known and accepted for now:
   day, checked only by the smoke test. It installs nothing else (`--no-deps`),
   and there is no waiting period before new releases are used.
 - **Worker libraries.** TensorFlow.js and ONNX Runtime are imported by code in
-  rapidNNV's worker, so they cannot carry integrity hashes (the worker cannot
+  Estimate's worker, so they cannot carry integrity hashes (the worker cannot
   read the token).
 
 ### Roadmap
@@ -233,7 +237,7 @@ These limits are known and accepted for now:
    be added to the solver list.
 5. Nicer results: verdicts and counterexamples as tables, and a better editor
    (Vehicle includes a language server).
-6. A combined mode: rapidNNV reads VNNLib, so it can first try Vehicle's
+6. A combined mode: Estimate reads VNNLib, so it can first try Vehicle's
    compiled queries in the browser and send only the undecided ones to the
    runner.
 
@@ -248,7 +252,7 @@ These limits are known and accepted for now:
 
 ## Known limitations
 
-The tool is designed to be fast rather than complete. rapidNNV's Results tab ("Where
+The tool is designed to be fast rather than complete. Estimate's Results tab ("Where
 the gaps come from") explains the two gaps in detail.
 
 - **Certification is incomplete.** There is no branch and bound over ReLUs or

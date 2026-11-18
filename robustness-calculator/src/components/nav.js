@@ -18,7 +18,7 @@ function link(href, text, className, current) {
   return a;
 }
 
-/** rapidNNV | VehicleWrapper: each opens its tool's first tab. */
+/** Estimate | Verify: each opens its tool's first tab. */
 export function renderToolSwitch(routes, activeRoute) {
   const nav = document.createElement("nav");
   nav.className = "tool-switch segmented";

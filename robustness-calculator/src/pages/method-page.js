@@ -3,7 +3,7 @@ import { el, code, link } from "../components/prose.js";
 import { info } from "../components/ui.js";
 import { docsPage, pageTitle, inShort, cards, defs, bullets, table, subhead, callout, p } from "../components/docs-layout.js";
 
-// rapidNNV Method tab: how the in-browser estimate works. Scannable: "In short" first, then one
+// Estimate Method tab: how the in-browser estimate works. Scannable: "In short" first, then one
 // section per part of the method, each opening with a one-sentence summary.
 
 /** A second, muted line in a table cell. */
@@ -17,9 +17,9 @@ export function renderMethodPage({ renderMath }) {
   };
 
   const header = [
-    pageTitle("How rapidNNV works", "A quick robustness estimate for ONNX networks, computed in your browser."),
+    pageTitle("How Estimate works", "A quick robustness estimate for ONNX networks, computed in your browser."),
     inShort(
-      p("For each point or property, rapidNNV gives one of three answers:"),
+      p("For each point or property, Estimate gives one of three answers:"),
       cards(
         [
           { tone: "certified", title: "Certified", text: "Proven robust (or safe). CROWN bounds show that no input in the box can change the answer." },
@@ -32,10 +32,10 @@ export function renderMethodPage({ renderMath }) {
         [
           el("strong", "", "An estimate, not a complete verifier. "),
           "Robust accuracy is a range: at least the certified share, at most the share without a counterexample. For complete verification use ",
-          link("#/vehicle", "VehicleWrapper"),
+          link("#/verify", "Verify"),
           ".",
         ],
-        ["Everything runs in your browser; nothing is uploaded. How well it works is on the ", link("#/rapid-results", "Results"), " tab."],
+        ["Everything runs in your browser; nothing is uploaded. How well it works is on the ", link("#/estimate-results", "Results"), " tab."],
       ]),
     ),
   ];
@@ -261,7 +261,7 @@ export function renderMethodPage({ renderMath }) {
     {
       id: "not-included",
       title: "Not included",
-      summary: "What rapidNNV deliberately leaves out to stay fast in the browser.",
+      summary: "What Estimate deliberately leaves out to stay fast in the browser.",
       body: [
         bullets([
           "Full α-CROWN optimisation and branch and bound over unstable ReLUs, needed for state-of-the-art complete verification. Input splitting is only over low-dimensional inputs (at most 4 varying features for properties).",

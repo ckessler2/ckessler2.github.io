@@ -12,8 +12,9 @@ import {
   cancelJob,
 } from "../vehicle/runner-client.js";
 import { displayText, parseVehicleOutput, verdictLabel } from "../vehicle/output.js";
+import { EXAMPLES, VEHICLE_COMMIT, VEHICLE_REPO, fetchExample } from "../vehicle/examples.js";
 
-// VehicleWrapper Run tab: a .vcl editor beside the result. The toolbar holds the one main action
+// Verify Run tab: a .vcl editor beside the result. The toolbar holds the one main action
 // (Connect runner / Verify / Cancel), the specification's inputs and the runner's status. Runner
 // setup appears in the result pane only while not connected. Vehicle's output is read into one
 // row per property; the raw text stays available under "Full output".
@@ -21,7 +22,7 @@ import { displayText, parseVehicleOutput, verdictLabel } from "../vehicle/output
 // Typing never redraws the editor: runner events, streamed output and edits update the toolbar
 // and the result pane in place (current.refresh), so the editor keeps focus and selection.
 
-const METHOD = "#/vehicle-method";
+const METHOD = "#/verify-method";
 const DOCKER_URL = "https://docs.docker.com/get-started/get-docker/";
 
 const form = {
@@ -30,9 +31,14 @@ const form = {
   datasets: {}, // name -> { fileName, bytes, extension }
   parameters: {}, // name -> text
   timeout: 600,
+  skip: new Set(), // declared properties not to verify (empty: verify all)
   exampleLoaded: false,
+  loading: null, // title of the example being fetched
   error: null,
 };
+
+/** Declared properties that will be verified. */
+const selectedProperties = (found) => found.properties.filter((name) => !form.skip.has(name));
 
 const view = {
   showFullCommand: false,
@@ -66,6 +72,7 @@ function missingInputs(found) {
   for (const name of found.networks) if (!form.networks[name]) missing.push(`network ${name}`);
   for (const name of found.datasets) if (!form.datasets[name]) missing.push(`dataset ${name}`);
   for (const name of found.parameters) if (!form.parameters[name]) missing.push(`parameter ${name}`);
+  if (found.properties.length && !selectedProperties(found).length) missing.push("a property");
   return missing;
 }
 
@@ -77,6 +84,7 @@ function signature(found) {
     n: found.networks.map((n) => file(form.networks[n])),
     d: found.datasets.map((n) => file(form.datasets[n])),
     p: found.parameters.map((n) => form.parameters[n] ?? ""),
+    y: selectedProperties(found),
   });
 }
 
@@ -90,7 +98,8 @@ function canVerify(found = declarations(form.specification)) {
 function verify() {
   const found = declarations(form.specification);
   if (!canVerify(found)) return;
-  lastRun = { signature: signature(found), properties: found.properties };
+  const chosen = selectedProperties(found);
+  lastRun = { signature: signature(found), properties: chosen };
   view.expanded.clear();
   view.fullOutputOpen = false;
   const pick = (all, names) => Object.fromEntries(names.map((n) => [n, all[n]]));
@@ -100,6 +109,7 @@ function verify() {
       networks: pick(form.networks, found.networks),
       datasets: pick(form.datasets, found.datasets),
       parameters: pick(form.parameters, found.parameters),
+      properties: chosen.length < found.properties.length ? chosen : [],
       timeout: form.timeout,
     },
     scheduleOutput,
@@ -116,22 +126,25 @@ function scheduleOutput() {
   });
 }
 
-async function loadExample() {
+async function loadExample(example = EXAMPLES[0]) {
+  form.loading = example.title;
+  form.error = null;
+  current?.refresh();
   try {
-    const [spec, model] = await Promise.all([
-      fetch("./runner/example/spec.vcl").then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.statusText)))),
-      fetch("./runner/example/model.onnx").then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.statusText)))),
-    ]);
-    form.specification = spec;
-    form.networks = { f: { fileName: "model.onnx (example)", bytes: new Uint8Array(model) } };
-    form.datasets = {};
-    form.parameters = {};
-    form.error = null;
+    const loaded = await fetchExample(example);
+    form.specification = loaded.specification;
+    form.networks = loaded.networks;
+    form.datasets = loaded.datasets;
+    form.parameters = loaded.parameters;
+    const declared = declarations(loaded.specification).properties;
+    form.skip = new Set(loaded.properties ? declared.filter((name) => !loaded.properties.includes(name)) : []);
   } catch (error) {
-    form.error = `Could not load the example: ${error.message}`;
+    form.error = `Could not load the example “${example.title}”: ${error.message}`;
   }
+  form.loading = null;
   form.exampleLoaded = true;
   current?.setSpec(form.specification);
+  current?.refresh();
 }
 
 function closePopovers() {
@@ -206,10 +219,31 @@ function buildToolbar() {
     return item;
   };
   const openButton = el("button", "secondary-button vw-tool", "Open ▾");
+  const exampleItems = EXAMPLES.map((example) => {
+    const item = menuItem(example.title, () => loadExample(example));
+    item.classList.add("vw-example-item");
+    item.append(el("span", "vw-example-detail", example.detail));
+    return item;
+  });
+  const source = el("p", "vw-menu-note");
+  const repoLink = el("a", "inline-link", "vehicle-lang/vehicle ↗");
+  repoLink.href = `${VEHICLE_REPO}/tree/${VEHICLE_COMMIT}/examples`;
+  repoLink.target = "_blank";
+  repoLink.rel = "noopener noreferrer";
+  source.append("Examples are fetched from ", repoLink, " on GitHub when you choose them.");
   const openMenu = popover(openButton, [
-    menuItem("Example: tiny ReLU network", loadExample),
+    el("p", "vw-panel-title", "Examples"),
+    ...exampleItems,
+    source,
+    el("hr", "vw-menu-rule"),
     menuItem("Open .vcl file…", () => vclInput.click()),
   ]);
+
+  // Which declared properties to verify.
+  const propsButton = el("button", "secondary-button vw-tool");
+  const propsPanel = el("div", "vw-props-panel");
+  const propsMenu = popover(propsButton, propsPanel);
+  let propsShown = null;
 
   // Inputs the specification declares.
   const inputsButton = el("button", "secondary-button vw-tool");
@@ -242,7 +276,43 @@ function buildToolbar() {
   const pillPanel = el("div", "vw-pill-panel");
   const pillMenu = popover(pillButton, pillPanel, { align: "end" });
 
-  bar.append(primary, needs, openMenu, inputsMenu, timeMenu, el("span", "vw-spacer"), pillMenu, vclInput);
+  bar.append(primary, needs, openMenu, inputsMenu, propsMenu, timeMenu, el("span", "vw-spacer"), pillMenu, vclInput);
+
+  function renderPropsPanel(found) {
+    if (!found.properties.length) {
+      propsPanel.replaceChildren(el("p", "", "The specification declares no @property yet."));
+      return;
+    }
+    const boxes = found.properties.map((name) => {
+      const row = el("label", "vw-prop-row");
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = !form.skip.has(name);
+      box.addEventListener("change", () => {
+        if (box.checked) form.skip.delete(name);
+        else form.skip.add(name);
+        update();
+        current?.refreshOutput();
+      });
+      row.append(box, el("span", "", name));
+      return { row, box, name };
+    });
+    const setAll = (on) => {
+      form.skip = new Set(on ? [] : found.properties);
+      for (const b of boxes) b.box.checked = on;
+      update();
+      current?.refreshOutput();
+    };
+    const all = button("All", { onClick: () => setAll(true) });
+    const none = button("None", { onClick: () => setAll(false) });
+    all.classList.add("vw-small");
+    none.classList.add("vw-small");
+    const head = el("div", "vw-props-head");
+    head.append(el("p", "vw-panel-title", "Properties to verify"), all, none);
+    const list = el("div", "vw-props-list");
+    list.append(...boxes.map((b) => b.row));
+    propsPanel.replaceChildren(head, list);
+  }
   bar.addEventListener("click", () => fitPopovers(bar), true); // capture: popover buttons stop propagation
 
   function renderInputsPanel(found) {
@@ -371,7 +441,11 @@ function buildToolbar() {
       primary.className = "run-button vw-primary";
       primary.disabled = runner.connection === "connecting";
     }
-    needs.textContent = connected && !running && missing.length ? `Needs: ${missing.join(", ")}` : "";
+    needs.textContent = form.loading
+      ? `Loading ${form.loading}…`
+      : connected && !running && missing.length
+        ? `Needs: ${missing.join(", ")}`
+        : "";
     primary.title = needs.textContent;
 
     const key = JSON.stringify([found.networks, found.datasets, found.parameters]);
@@ -379,6 +453,17 @@ function buildToolbar() {
       inputsShown = key;
       renderInputsPanel(found);
     }
+    const propsKey = JSON.stringify(found.properties);
+    if (propsKey !== propsShown) {
+      propsShown = propsKey;
+      for (const name of [...form.skip]) if (!found.properties.includes(name)) form.skip.delete(name);
+      renderPropsPanel(found);
+    }
+    const chosen = selectedProperties(found).length;
+    propsButton.textContent =
+      chosen === found.properties.length ? `Properties: all ${found.properties.length}` : `Properties: ${chosen} of ${found.properties.length}`;
+    propsButton.classList.toggle("is-missing", found.properties.length > 0 && chosen === 0);
+
     const label = inputsLabel(found);
     inputsButton.textContent = label.text;
     inputsButton.classList.toggle("is-missing", label.missing);
@@ -669,7 +754,7 @@ function renderFullOutput(job, fallback) {
 function renderResults(found) {
   const job = runner.job;
   const parsed = parseVehicleOutput(job.output);
-  const declared = lastRun?.properties ?? found.properties;
+  const declared = lastRun?.properties ?? selectedProperties(found);
   const rows = mergeRows(declared, parsed.properties, job);
 
   const wrap = el("div", "vw-results");
@@ -733,11 +818,11 @@ function renderPending(found) {
   const head = el("p", "vw-headline is-idle");
   head.append(
     el("span", "status-dot"),
-    el("span", "", `${plural(found.properties.length, "property", "properties")} to verify `),
+    el("span", "", `${plural(selectedProperties(found).length, "property", "properties")} to verify `),
     info("Each @property is proved, or refuted with a counterexample, unless it runs out of time.", METHOD),
   );
   const list = el("div", "vw-rows");
-  for (const name of found.properties) list.append(renderRow({ name, verdict: "pending", values: [] }, new Set()));
+  for (const name of selectedProperties(found)) list.append(renderRow({ name, verdict: "pending", values: [] }, new Set()));
   box.append(head, list);
   return box;
 }

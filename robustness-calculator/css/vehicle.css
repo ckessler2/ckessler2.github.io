@@ -582,3 +582,63 @@ details.vw-row[open] > summary .vw-row-head::after {
   width: max-content;
   max-width: min(300px, calc(100vw - 32px));
 }
+
+/* ---------- Examples menu and property selection ---------- */
+
+.vw-example-item {
+  display: grid;
+  gap: 1px;
+  max-width: 300px;
+}
+
+.vw-example-detail {
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.vw-menu-note {
+  margin: 2px 8px 0;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+  max-width: 290px;
+}
+
+.vw-menu-rule {
+  width: 100%;
+  margin: 2px 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.vw-props-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 220px;
+}
+
+.vw-props-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vw-props-head .vw-panel-title {
+  flex: 1;
+}
+
+.vw-props-list {
+  display: grid;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.vw-prop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}

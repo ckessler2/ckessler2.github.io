@@ -49,7 +49,7 @@ export function popover(button, panelContent, { className = "", align = "start" 
 
 /**
  * ⓘ help: a definition or "why" in one or two sentences, with an optional link to the Method page.
- * Usage: label.append(" ", info("L∞ radius: every input may move by at most ε.", "#/rapid-method"))
+ * Usage: label.append(" ", info("L∞ radius: every input may move by at most ε.", "#/estimate-method"))
  */
 export function info(text, href = null, linkText = "More on the Method page") {
   const button = el("button", "info-button", "i");

@@ -9,20 +9,29 @@ import { renderMath } from "./math.js";
 
 // Tabs, in nav order, grouped by tool. The group is shown as a label in the nav.
 const routes = {
-  rapid: { group: "rapidNNV", label: "Run", render: renderCheckPage },
-  "rapid-method": { group: "rapidNNV", label: "Method", render: renderMethodPage },
-  "rapid-results": { group: "rapidNNV", label: "Results", render: renderResultsPage },
-  vehicle: { group: "VehicleWrapper", label: "Run", render: renderVehiclePage },
-  "vehicle-method": { group: "VehicleWrapper", label: "Method", render: renderVehicleMethodPage },
+  estimate: { group: "Estimate", label: "Run", render: renderCheckPage },
+  "estimate-method": { group: "Estimate", label: "Method", render: renderMethodPage },
+  "estimate-results": { group: "Estimate", label: "Results", render: renderResultsPage },
+  verify: { group: "Verify", label: "Run", render: renderVehiclePage },
+  "verify-method": { group: "Verify", label: "Method", render: renderVehicleMethodPage },
 };
 
 // Earlier tab names, so old links keep working.
-const aliases = { check: "rapid", method: "rapid-method", results: "rapid-results" };
+const aliases = {
+  check: "estimate",
+  method: "estimate-method",
+  results: "estimate-results",
+  rapid: "estimate",
+  "rapid-method": "estimate-method",
+  "rapid-results": "estimate-results",
+  vehicle: "verify",
+  "vehicle-method": "verify-method",
+};
 
 function resolveRoute() {
-  const key = window.location.hash.replace(/^#\/?/, "") || "rapid";
+  const key = window.location.hash.replace(/^#\/?/, "") || "estimate";
   const routeKey = aliases[key] ?? key;
-  return routes[routeKey] ? routeKey : "rapid";
+  return routes[routeKey] ? routeKey : "estimate";
 }
 
 function displayToggles(appState, state, render) {
@@ -77,7 +86,7 @@ export function createRouter(root, state, worker) {
     const header = el("header", "site-header");
     const bar = el("div", "header-bar");
     const title = el("a", "site-title", "easyNNV");
-    title.href = "#/rapid";
+    title.href = "#/estimate";
     bar.append(title, renderToolSwitch(routes, activeRoute), el("span", "header-spacer"), displayToggles(appState, state, render));
     header.append(bar, renderSubtabs(routes, activeRoute));
 

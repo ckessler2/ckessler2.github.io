@@ -2,8 +2,8 @@ import { el, code, link } from "../components/prose.js";
 import { info } from "../components/ui.js";
 import { docsPage, pageTitle, inShort, cards, defs, bullets, subhead, callout, p } from "../components/docs-layout.js";
 
-// VehicleWrapper Method tab: get started, how it works, security, reference.
-// The roadmap and open questions live in README.md (VehicleWrapper, "Roadmap").
+// Verify Method tab: get started, how it works, security, reference.
+// The roadmap and open questions live in README.md (Verify, "Roadmap").
 // The command shown here is a template; the Run tab fills in the token.
 
 const START_COMMAND =
@@ -15,7 +15,7 @@ const decision = (text) => callout([el("strong", "", "Decision: "), text], "deci
 
 export function renderVehicleMethodPage() {
   const header = [
-    pageTitle("How VehicleWrapper works", "Complete verification of Vehicle specifications, run on your own machine from this page."),
+    pageTitle("How Verify works", "Complete verification of Vehicle specifications, run on your own machine from this page."),
     inShort(
       cards([
         {
@@ -33,7 +33,7 @@ export function renderVehicleMethodPage() {
         { title: "A wrapper", text: "Vehicle and Marabou do all the work, unchanged; this page only makes them easier to run." },
       ]),
       p(
-        "rapidNNV is fast but incomplete: some points and properties stay unknown. VehicleWrapper decides them, at the cost of a local setup and longer runs.",
+        "Estimate is fast but incomplete: some points and properties stay unknown. Verify decides them, at the cost of a local setup and longer runs.",
       ),
     ),
   ];
@@ -49,14 +49,14 @@ export function renderVehicleMethodPage() {
             ["Install ", link("https://docs.docker.com/get-docker/", "Docker"), " (Docker Desktop on macOS and Windows)."],
             [
               "On the ",
-              link("#/vehicle", "Run tab"),
+              link("#/verify", "Run tab"),
               ", copy the start command (it holds a fingerprint of a secret made for this tab) and run it in a terminal. The first start downloads the image (about 650 MB).",
             ],
             "Press Connect runner. The page contacts the runner only then, so opening the tab never triggers a browser prompt; it reconnects by itself after a reload.",
             [
               "Write a ",
               code(".vcl"),
-              " specification, or keep the preloaded example (one property that holds, one that does not, with its network).",
+              " specification, or pick an example under Open: the built-in tiny network, or Vehicle's own wind controller, ACAS Xu and MNIST robustness examples, fetched from Vehicle's GitHub repository when you choose them.",
             ],
             [
               "Give each network, dataset and parameter the specification declares (",
@@ -67,7 +67,7 @@ export function renderVehicleMethodPage() {
               code("@parameter"),
               ") its input under Networks (or Inputs) in the toolbar; inferred parameters are left to Vehicle.",
             ],
-            "Set a time limit and press Verify. Results fill in as Vehicle reports them (see Reading the results). Cancel closes the connection, and the runner stops within a few seconds.",
+            "Under Properties, untick any you don't want to check (all are ticked by default). Set a time limit and press Verify. Results fill in as Vehicle reports them (see Reading the results). Cancel closes the connection, and the runner stops within a few seconds.",
           ],
           { ordered: true, className: "docs-steps" },
         ),
@@ -211,7 +211,7 @@ export function renderVehicleMethodPage() {
           ],
           [
             "Worker libraries",
-            "The libraries loaded by rapidNNV's background worker (TensorFlow.js, ONNX Runtime) cannot carry integrity hashes, because code imports them; that worker cannot read the secret.",
+            "The libraries loaded by Estimate's background worker (TensorFlow.js, ONNX Runtime) cannot carry integrity hashes, because code imports them; that worker cannot read the secret.",
           ],
         ]),
       ],
