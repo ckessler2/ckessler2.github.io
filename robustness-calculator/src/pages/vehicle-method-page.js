@@ -56,7 +56,7 @@ export function renderVehicleMethodPage() {
             [
               "Write a ",
               code(".vcl"),
-              " specification, or pick an example under Open: the built-in tiny network, or Vehicle's own wind controller, ACAS Xu and MNIST robustness examples, fetched from Vehicle's GitHub repository when you choose them.",
+              " specification, or pick an example under Open: the built-in tiny network, or one of 14 from the Vehicle tutorial (ACAS Xu, Iris, MNIST and Fashion-MNIST robustness, networks before and after property-driven training, and the wind controller), fetched from its GitHub repository when you choose them.",
             ],
             [
               "Give each network, dataset and parameter the specification declares (",

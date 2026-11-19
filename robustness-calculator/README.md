@@ -164,14 +164,42 @@ On the **Run** tab:
 
 1. Start the runner with the command the tab shows (it holds the SHA-256 of
    a random token made for this browser tab), then press **Connect**. The page contacts
-   `http://127.0.0.1:8765` only after that, and checks in every 30 seconds.
+   `http://127.0.0.1:8765` only after that, and checks in every 5 seconds.
 2. Write a specification, or choose an example under **Open**: the built-in
-   tiny network, or Vehicle's own wind controller, ACAS Xu and MNIST
-   robustness examples (fetched from github.com/vehicle-lang/vehicle at a
-   pinned commit when chosen; nothing is hosted here; see
-   `src/vehicle/examples.js`). The networks, datasets and parameters it
-   declares each get an input, and **Properties** chooses which to verify.
+   tiny network, or one of the Vehicle tutorial's examples (see below). The
+   networks, datasets and parameters it declares each get an input, and
+   **Properties** chooses which to verify.
 3. Press **Verify**. Vehicle's output appears as it runs; **Cancel** stops it.
+
+### Examples
+
+Open lists the specifications of the
+[Vehicle tutorial](https://vehicle-lang.github.io/tutorial/) that Marabou can
+verify, fetched from
+[vehicle-lang/vehicle-tutorial](https://github.com/vehicle-lang/vehicle-tutorial)
+at a pinned commit when chosen (nothing is hosted here; see
+`src/vehicle/examples.js`). Times are with the runner's 2 CPUs and 4 GB.
+
+| Chapter | Example | Result |
+| --- | --- | --- |
+| 2 | ACAS Xu property 3, network 1_7 | counterexample, seconds |
+| 2 | Iris classifier, sample answers to exercise 4 (properties 1–6) | 1 of 6 holds, seconds |
+| 3 | MNIST robustness, 2 images, ε = 0.005 | both robust, ~40 s |
+| 3 | Strong classification robustness (exercise 4) | both robust, ~5 s |
+| 3 | Fashion-MNIST robustness, first 10 images (exercise 7) | all robust, ~50 s |
+| 3 | Robustness over the box around 5 inputs (exercise 5 sample) | counterexample, seconds |
+| 4 | ACAS Xu 1_8 before / after property-driven training, properties 1, 3, 4, 9 | 1 / 4 of 4 hold, 6 s / 20 s |
+| 4 | Fashion-MNIST before / after property-driven training, first 10 images, ε = 0.02 | 6 / 8 of 10 robust, ~2 / ~3 min |
+| 5 | Wind controller; with records (exercise 3); centred stability (exercise 4); with parameters (challenge) | all proved, seconds |
+
+Left out, because Marabou or Vehicle 0.29 cannot run them: standard
+robustness (exercise 5: two applications of the network), Euclidean
+robustness (exercise 6: non-linear), the compiler-bug reproducers in
+`chapter-3/solutions/repro`, the second box specification (`spec2.vcl`, which
+does not compile), the incomplete exercise files, Iris property 0 (a file
+check that does not compile), and chapter 6 (a separate 5 GB artifact).
+The 50-image slices of chapters 3 and 4 need about 8 GB, more than the
+runner's 4 GB, so the examples use their first 10 images.
 
 The runner stops by itself when the page closes, or when you press
 **Disconnect** (in the status menu at the top right). The **Method** tab explains

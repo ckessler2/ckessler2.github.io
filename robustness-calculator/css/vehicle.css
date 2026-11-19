@@ -18,6 +18,23 @@
   box-shadow: var(--shadow);
 }
 
+/* Wide screens: two cells that line up with the editor and result columns below (.vw-layout).
+   The first column is 55% of the layout less the toolbar's padding and border, so the main
+   action starts exactly above the result pane. */
+.vw-toolbar {
+  display: grid;
+  grid-template-columns: calc(55% - 1.5px) minmax(0, 1fr);
+}
+
+.vw-tools,
+.vw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .vw-toolbar .run-button,
 .vw-toolbar .secondary-button {
   padding: 7px 12px;
@@ -527,11 +544,32 @@ details.vw-row[open] > summary .vw-row-head::after {
   }
 
   .vw-toolbar {
+    display: flex;
     position: sticky;
     top: 0;
     z-index: 10;
     gap: 6px;
     padding: 6px 8px;
+  }
+
+  /* Narrow screens: one wrapping row, main action first. */
+  .vw-tools,
+  .vw-actions {
+    display: contents;
+  }
+
+  .vw-primary {
+    order: -2;
+  }
+
+  .vw-needs {
+    order: -1;
+  }
+
+  .vw-spacer,
+  .vw-pill-button,
+  .vw-actions > .popover {
+    order: 1;
   }
 
   .vw-editor {
@@ -588,7 +626,7 @@ details.vw-row[open] > summary .vw-row-head::after {
 .vw-example-item {
   display: grid;
   gap: 1px;
-  max-width: 300px;
+  max-width: 340px;
 }
 
 .vw-example-detail {
@@ -602,7 +640,7 @@ details.vw-row[open] > summary .vw-row-head::after {
   margin: 2px 8px 0;
   color: var(--muted);
   font-size: var(--font-size-small);
-  max-width: 290px;
+  max-width: 330px;
 }
 
 .vw-menu-rule {
@@ -647,4 +685,29 @@ details.vw-row[open] > summary .vw-row-head::after {
   margin-left: 0.25rem;
   color: var(--muted);
   font-size: 0.75em;
+}
+
+/* Open menu: the tutorial's examples, grouped by chapter, in a scrolling list. */
+.vw-example-list {
+  display: grid;
+  gap: 1px;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.vw-example-group {
+  margin: 8px 8px 2px;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  max-width: 330px;
+}
+
+.vw-example-group:first-child {
+  margin-top: 2px;
+}
+
+.vw-example-group .inline-link {
+  font-weight: 400;
+  text-decoration: none;
 }

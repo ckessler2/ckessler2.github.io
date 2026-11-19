@@ -11,12 +11,16 @@
 //         x: const 0.75 [2]
 //   Error: syntax error at line 9, column 26 before `.'
 
-/** Vehicle redraws progress bars with carriage returns; keep only what was drawn last. */
+/**
+ * Vehicle redraws progress bars with carriage returns; keep only what was drawn last (a line can
+ * also end with one, when the result follows on the next line). Colour codes are removed.
+ */
 export function displayText(output) {
   return output
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, "")
     .trimStart()
     .split("\n")
-    .map((line) => line.split("\r").pop())
+    .map((line) => line.split("\r").filter((part) => part.trim()).pop() ?? "")
     .join("\n");
 }
 

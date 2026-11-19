@@ -13,7 +13,7 @@ import {
   cancelJob,
 } from "../vehicle/runner-client.js";
 import { displayText, parseVehicleOutput, verdictLabel } from "../vehicle/output.js";
-import { EXAMPLES, VEHICLE_COMMIT, VEHICLE_REPO, fetchExample } from "../vehicle/examples.js";
+import { EXAMPLES, EXAMPLE_GROUPS, TUTORIAL_COMMIT, TUTORIAL_REPO, fetchExample } from "../vehicle/examples.js";
 
 // Verify Run tab: a .vcl editor beside the result. The toolbar holds the one main action
 // (Connect runner / Verify / Cancel), the specification's inputs and the runner's status. Runner
@@ -139,6 +139,7 @@ async function loadExample(example = EXAMPLES[0]) {
     form.parameters = loaded.parameters;
     const declared = declarations(loaded.specification).properties;
     form.skip = new Set(loaded.properties ? declared.filter((name) => !loaded.properties.includes(name)) : []);
+    if (loaded.timeout) form.timeout = loaded.timeout;
   } catch (error) {
     form.error = `Could not load the example “${example.title}”: ${error.message}`;
   }
@@ -220,24 +221,37 @@ function buildToolbar() {
     return item;
   };
   const openButton = el("button", "secondary-button vw-tool", "Open ▾");
-  const exampleItems = EXAMPLES.map((example) => {
-    const item = menuItem(example.title, () => loadExample(example));
-    item.classList.add("vw-example-item");
-    item.append(el("span", "vw-example-detail", example.detail));
-    return item;
-  });
+  const externalLink = (text, href) => {
+    const a = el("a", "inline-link", text);
+    a.href = href;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    return a;
+  };
+  const exampleList = el("div", "vw-example-list");
+  for (const group of EXAMPLE_GROUPS) {
+    const heading = el("p", "vw-example-group", group.title);
+    if (group.href) heading.append(" ", externalLink("↗", group.href));
+    exampleList.append(heading);
+    for (const example of group.examples) {
+      const item = menuItem(example.title, () => loadExample(example));
+      item.classList.add("vw-example-item");
+      item.append(el("span", "vw-example-detail", example.detail));
+      exampleList.append(item);
+    }
+  }
   const source = el("p", "vw-menu-note");
-  const repoLink = el("a", "inline-link", "vehicle-lang/vehicle ↗");
-  repoLink.href = `${VEHICLE_REPO}/tree/${VEHICLE_COMMIT}/examples`;
-  repoLink.target = "_blank";
-  repoLink.rel = "noopener noreferrer";
-  source.append("Examples are fetched from ", repoLink, " on GitHub when you choose them.");
+  source.append(
+    "Fetched from the ",
+    externalLink("Vehicle tutorial ↗", `${TUTORIAL_REPO}/tree/${TUTORIAL_COMMIT}`),
+    " on GitHub when you choose one.",
+  );
   const openMenu = popover(openButton, [
-    el("p", "vw-panel-title", "Examples"),
-    ...exampleItems,
-    source,
-    el("hr", "vw-menu-rule"),
     menuItem("Open .vcl file…", () => vclInput.click()),
+    el("hr", "vw-menu-rule"),
+    el("p", "vw-panel-title", "Examples"),
+    exampleList,
+    source,
   ]);
 
   // Which declared properties to verify.
@@ -277,7 +291,12 @@ function buildToolbar() {
   const pillPanel = el("div", "vw-pill-panel");
   const pillMenu = popover(pillButton, pillPanel, { align: "end" });
 
-  bar.append(primary, needs, openMenu, inputsMenu, propsMenu, timeMenu, el("span", "vw-spacer"), pillMenu, vclInput);
+  // On wide screens the tools sit above the editor and the main action above the result pane.
+  const tools = el("div", "vw-tools");
+  tools.append(openMenu, inputsMenu, propsMenu, timeMenu, vclInput);
+  const actions = el("div", "vw-actions");
+  actions.append(primary, needs, el("span", "vw-spacer"), pillMenu);
+  bar.append(tools, actions);
 
   function renderPropsPanel(found) {
     if (!found.properties.length) {
