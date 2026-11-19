@@ -27,7 +27,7 @@ function mnistFc(layersLabel, net, codes003, codes005) {
     id: `mnist_fc-${net}`,
     task: "classification",
     kind: "points",
-    label: `VNN-COMP 2022 mnist_fc: ${layersLabel} ReLU network`,
+    label: `VNN-COMP 2022 mnist_fc: MNIST, ${layersLabel} ReLU`,
     modelName: `mnist-net_${net}.onnx`,
     modelUrl: `${VNN2022}/onnx/mnist-net_${net}.onnx.gz`,
     // The ε = 0.03 property files are only used to recover the 15 images.
@@ -59,7 +59,7 @@ function cora(dataset, kind, codes) {
     id: `cora-${dataset}-${kind}`,
     task: "classification",
     kind: "points",
-    label: `VNN-COMP 2025 CORA: ${d.name} 7×250 ReLU, ${CORA_MODELS[kind]}`,
+    label: `VNN-COMP 2025 cora_2024: ${d.name}, 7×250 ReLU, ${CORA_MODELS[kind]}`,
     modelName: `${dataset}-${kind}.onnx`,
     modelUrl: `${VNN2025}/onnx/${dataset}-${kind}.onnx.gz`,
     propertyUrls: d.images.map((i) => `${VNN2025}/vnnlib/${dataset}-img${i}.vnnlib.gz`),
@@ -83,7 +83,7 @@ function malbeware(k, files, codes) {
     id: `malbeware-linear-eps${k}`,
     task: "classification",
     kind: "points",
-    label: `VNN-COMP 2025 MalBeWare: linear 64×64 → 25 classes, ε = ${k}/255`,
+    label: `VNN-COMP 2025 malbeware: Malimg malware images, linear, ε = ${k}/255`,
     modelName: "malware_malimg_family_scaled_linear-25.onnx",
     modelUrl: `${VNN2025_MAL}/onnx/malware_malimg_family_scaled_linear-25.onnx.gz`,
     propertyUrls: files.map((f) => `${VNN2025_MAL}/vnnlib/malbeware_family-${encodeURIComponent(f)}.vnnlib.gz`),
@@ -128,7 +128,7 @@ function propertyBenchmark({ id, label, modelName, modelUrl, base, names, codes,
 function collins(net, description, k, names, codes) {
   return propertyBenchmark({
     id: `collins-${net}-p${k}`,
-    label: `Collins RUL CNN (${description}): ${k} perturbed inputs`,
+    label: `VNN-COMP 2025 collins_rul_cnn_2022: C-MAPSS engine data, ${description}, ${k} perturbed inputs`,
     modelName: `${net}.onnx`,
     modelUrl: `${VNN2025_ROOT}/collins_rul_cnn_2022/onnx/${net}.onnx.gz`,
     base: `${VNN2025_ROOT}/collins_rul_cnn_2022/vnnlib`,
@@ -146,7 +146,7 @@ function collins(net, description, k, names, codes) {
 function lindex(net, names, codes) {
   return propertyBenchmark({
     id: `nn4sys-${net}`,
-    label: `nn4sys learned index (${net === "lindex" ? "4 layers" : "deep"})`,
+    label: `VNN-COMP 2025 nn4sys: learned index (key → position), ${net === "lindex" ? "4 layers" : "deep"}`,
     modelName: `${net}.onnx`,
     modelUrl: `${VNN2025_ROOT}/nn4sys/onnx/${net}.onnx.gz`,
     base: `${VNN2025_ROOT}/nn4sys/vnnlib`,
@@ -160,7 +160,7 @@ function lindex(net, names, codes) {
 // Reachability of learned dynamics models: for a box of initial states the
 // predicted state must avoid an unsafe set.
 function reachProb(net, names, codes) {
-  const what = { gcas: "ground-collision avoidance (14 states)", robot: "robot (5 states)", vdp: "Van der Pol oscillator (3 states)" }[net];
+  const what = { gcas: "ground-collision avoidance dynamics (14 states)", robot: "robot dynamics (5 states)", vdp: "Van der Pol oscillator dynamics (3 states)" }[net];
   return propertyBenchmark({
     id: `reach_prob-${net}`,
     label: `VNN-COMP 2022 reach_prob_density: ${what}`,
@@ -207,18 +207,18 @@ export const BENCHMARKS = [
   mnistFc("6×256", "256x6", "uuuuuusuuuuuuuu", "usuuuus?uuuuuuu"),
   mnistFc("4×256", "256x4", "usuuuuuuuuuuuuu", "usuuuususuuuuuu"),
   mnistFc("2×256", "256x2", "ussuuuuuuuuusuu", "sssusssusuuusuu"),
-  collins("NN_rul_small_window_20", "small, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
-  collins("NN_rul_small_window_20", "small, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
-  collins("NN_rul_small_window_20", "small, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
-  collins("NN_rul_small_window_20", "small, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
-  collins("NN_rul_full_window_20", "full, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
-  collins("NN_rul_full_window_20", "full, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
-  collins("NN_rul_full_window_20", "full, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
-  collins("NN_rul_full_window_20", "full, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
-  collins("NN_rul_full_window_40", "full, window 40", 2, ["robustness_2perturbations_delta5_epsilon10_w40", "robustness_2perturbations_delta10_epsilon10_w40", "robustness_2perturbations_delta20_epsilon10_w40", "robustness_2perturbations_delta40_epsilon10_w40"], "uuuu"),
-  collins("NN_rul_full_window_40", "full, window 40", 4, ["robustness_4perturbations_delta5_epsilon10_w40", "robustness_4perturbations_delta10_epsilon10_w40", "robustness_4perturbations_delta20_epsilon10_w40", "robustness_4perturbations_delta40_epsilon10_w40"], "ssus"),
-  collins("NN_rul_full_window_40", "full, window 40", 8, ["robustness_8perturbations_delta5_epsilon10_w40", "robustness_8perturbations_delta10_epsilon10_w40", "robustness_8perturbations_delta20_epsilon10_w40", "robustness_8perturbations_delta40_epsilon10_w40"], "uuus"),
-  collins("NN_rul_full_window_40", "full, window 40", 16, ["robustness_16perturbations_delta5_epsilon10_w40", "robustness_16perturbations_delta10_epsilon10_w40", "robustness_16perturbations_delta20_epsilon10_w40", "robustness_16perturbations_delta40_epsilon10_w40"], "uuuu"),
+  collins("NN_rul_small_window_20", "small CNN, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
+  collins("NN_rul_small_window_20", "small CNN, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
+  collins("NN_rul_small_window_20", "small CNN, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
+  collins("NN_rul_small_window_20", "small CNN, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
+  collins("NN_rul_full_window_20", "full CNN, window 20", 2, ["robustness_2perturbations_delta5_epsilon10_w20", "robustness_2perturbations_delta10_epsilon10_w20", "robustness_2perturbations_delta20_epsilon10_w20", "robustness_2perturbations_delta40_epsilon10_w20"], "suuu"),
+  collins("NN_rul_full_window_20", "full CNN, window 20", 4, ["robustness_4perturbations_delta5_epsilon10_w20", "robustness_4perturbations_delta10_epsilon10_w20", "robustness_4perturbations_delta20_epsilon10_w20", "robustness_4perturbations_delta40_epsilon10_w20"], "ssss"),
+  collins("NN_rul_full_window_20", "full CNN, window 20", 8, ["robustness_8perturbations_delta5_epsilon10_w20", "robustness_8perturbations_delta10_epsilon10_w20", "robustness_8perturbations_delta20_epsilon10_w20", "robustness_8perturbations_delta40_epsilon10_w20"], "uuuu"),
+  collins("NN_rul_full_window_20", "full CNN, window 20", 16, ["robustness_16perturbations_delta5_epsilon10_w20", "robustness_16perturbations_delta10_epsilon10_w20", "robustness_16perturbations_delta20_epsilon10_w20", "robustness_16perturbations_delta40_epsilon10_w20"], "usus"),
+  collins("NN_rul_full_window_40", "full CNN, window 40", 2, ["robustness_2perturbations_delta5_epsilon10_w40", "robustness_2perturbations_delta10_epsilon10_w40", "robustness_2perturbations_delta20_epsilon10_w40", "robustness_2perturbations_delta40_epsilon10_w40"], "uuuu"),
+  collins("NN_rul_full_window_40", "full CNN, window 40", 4, ["robustness_4perturbations_delta5_epsilon10_w40", "robustness_4perturbations_delta10_epsilon10_w40", "robustness_4perturbations_delta20_epsilon10_w40", "robustness_4perturbations_delta40_epsilon10_w40"], "ssus"),
+  collins("NN_rul_full_window_40", "full CNN, window 40", 8, ["robustness_8perturbations_delta5_epsilon10_w40", "robustness_8perturbations_delta10_epsilon10_w40", "robustness_8perturbations_delta20_epsilon10_w40", "robustness_8perturbations_delta40_epsilon10_w40"], "uuus"),
+  collins("NN_rul_full_window_40", "full CNN, window 40", 16, ["robustness_16perturbations_delta5_epsilon10_w40", "robustness_16perturbations_delta10_epsilon10_w40", "robustness_16perturbations_delta20_epsilon10_w40", "robustness_16perturbations_delta40_epsilon10_w40"], "uuuu"),
   lindex("lindex", ["lindex_1", "lindex_200", "lindex_400", "lindex_600", "lindex_800", "lindex_1000"], "uuuuuu"),
   lindex("lindex_deep", ["lindex_1", "lindex_200", "lindex_400", "lindex_600", "lindex_800", "lindex_1000"], "uuuuuu"),
   reachProb("gcas", ["gcas_0", "gcas_1", "gcas_2", "gcas_3", "gcas_4", "gcas_5", "gcas_6", "gcas_7", "gcas_8", "gcas_9", "gcas_10", "gcas_11"], "ussuuusuusuu"),

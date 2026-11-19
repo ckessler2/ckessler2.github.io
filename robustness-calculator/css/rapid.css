@@ -50,6 +50,8 @@
 
 .rapid-flow {
   display: grid;
+  /* minmax(0, …): a long option in a select must not widen the page on phones. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -58,7 +60,8 @@
 .rf-field {
   display: grid;
   /* The input sits right after its label (e.g. "ε ⓘ [0.1]"), not at the far edge. */
-  grid-template-columns: max-content minmax(90px, 132px);
+  /* The empty third column lets a hint underneath use the full width. */
+  grid-template-columns: max-content minmax(90px, 132px) minmax(0, 1fr);
   justify-content: start;
   gap: 4px 12px;
   align-items: center;
@@ -99,6 +102,12 @@
 .rf-hint {
   grid-column: 1 / -1;
   margin: 0;
+}
+
+/* A long hint under a side-by-side row wraps instead of widening the label column. */
+.rf-field:not(.rf-stacked) > .rf-hint {
+  width: 0;
+  min-width: 100%;
 }
 
 .rf-stacked .rf-hint {
@@ -189,6 +198,13 @@ body[data-theme="dark"] .rf-control select {
 .rf-status.is-warn .status-dot { background: var(--warn); }
 .rf-status.is-error .status-dot { background: var(--bad); }
 .rf-status.is-error { color: var(--bad); }
+.rf-error-raw {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: var(--font-size-small);
+}
+.rf-error-raw summary { cursor: pointer; }
+.rf-error-raw code { display: block; overflow-wrap: anywhere; white-space: pre-wrap; }
 .rf-status.is-busy .status-dot {
   background: var(--accent);
   animation: status-pulse 1.2s ease-in-out infinite;

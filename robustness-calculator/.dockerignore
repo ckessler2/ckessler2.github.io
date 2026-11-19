@@ -1,0 +1,5 @@
+# Only what runner/Dockerfile copies is needed in the build context.
+node_modules
+tests
+.git
+*.md

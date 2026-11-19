@@ -52,7 +52,7 @@ export function renderVehicleMethodPage() {
               link("#/verify", "Run tab"),
               ", copy the start command (it holds a fingerprint of a secret made for this tab) and run it in a terminal. The first start downloads the image (about 650 MB).",
             ],
-            "Press Connect runner. The page contacts the runner only then, so opening the tab never triggers a browser prompt; it reconnects by itself after a reload.",
+            "Press Connect runner. The page contacts the runner only then, so opening the tab never triggers a browser prompt; it reconnects by itself after a reload. If your browser blocks the connection (Safari, Brave, or a declined “local network” prompt in Chrome), the page says so after a few seconds and offers the same page served by the runner itself at http://127.0.0.1:8765, which needs no permission.",
             [
               "Write a ",
               code(".vcl"),
@@ -99,6 +99,14 @@ export function renderVehicleMethodPage() {
         p(
           "If Vehicle stops with an error (for example a syntax error in the specification), its message is shown instead of the rows, with a button that selects the line it refers to in the editor. Vehicle's complete output, including every warning, is always available under Full output, with Copy and Download.",
         ),
+        subhead("Counterexamples as images"),
+        p(
+          "When a counterexample is a matrix (for example the perturbation of an MNIST image), it is drawn: the dataset image, the perturbation (red positive, blue negative), and, after Check with the network, the perturbed image. That check runs the network on the perturbed image in your browser with onnxruntime and says whether its answer really changes.",
+        ),
+        subhead("Run record"),
+        p(
+          "Run record (under Full output) downloads a JSON file with the specification, the SHA-256 of every network and dataset, the parameters, the runner's image revision and every package version, the limits, the verdicts, and a docker command that repeats the run with exactly the same image.",
+        ),
         callout("After you edit the specification or its inputs, the previous result is dimmed until you verify again, so a result always matches what it was run on.", "note"),
       ],
     },
@@ -126,13 +134,16 @@ export function renderVehicleMethodPage() {
 
         subhead("Always the newest versions"),
         p(
-          "No versions are pinned. A GitHub Action rebuilds the image every day with the newest Vehicle, Marabou and base image, runs an example verification and the security checks, and publishes it only if they pass and something changed. ",
+          "No versions are pinned. A GitHub Action rebuilds the image every day with the newest Vehicle, Marabou and base image, checks that the newest releases were really installed, runs an example verification, the security checks and this page's reading of Vehicle's output, and publishes it only if they pass and something changed (a failed daily build opens an issue). ",
           code("--pull=always"),
-          " gives you the newest image at each start; the page shows the versions that ran.",
+          " gives you the newest image at each start; the page shows the versions that ran. Each published image is also tagged with its revision (for example ",
+          code("2026-11-19-abc1234"),
+          "), which the run record names, so a result can be repeated with exactly the same tools.",
         ),
         bullets([
           "The image is about 650 MB, downloaded in full the first time and again only when something in it changes.",
-          "Vehicle and Marabou publish Linux builds for x86 only, so on Apple Silicon Macs the image runs under emulation: it works, but more slowly.",
+          "Marabou publishes builds for x86 only (Vehicle also has ARM builds), so the image is x86, and on Apple Silicon Macs it runs under emulation: it works, but several times more slowly.",
+          "The runner has 4 GB of memory by default; choose 8 or 16 GB next to the start command for larger datasets (Docker Desktop must have that much, under Settings → Resources).",
           "Marabou's newest packaged release is 2.0.0 (April 2024), built for Python 3.8–3.11. Vehicle needs 3.10 or later, so the image uses Python 3.11.",
           "Docker itself is updated by Docker Desktop, or by your system's package manager on Linux.",
         ]),

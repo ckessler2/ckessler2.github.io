@@ -6,6 +6,6 @@ export const DISCLAIMER =
 
 /** Certification + attack. */
 export const DISCLAIMER_CERTIFIED =
-  "“Certified” points are proven robust by CROWN (with a float32 safety margin); “counterexample” points are proven not robust (re-checked with onnxruntime); “unknown” points are neither.";
+  "“Certified”: CROWN bounds show no input in the box changes the answer, in real arithmetic on the float64 network (as in VNN-COMP), with a float32 safety margin; not a floating-point-sound proof. “Counterexample”: a concrete failing input, re-checked with onnxruntime. “Unknown”: neither.";
 
 export const disclaimerFor = (result) => (result?.summary?.certification === "crown" ? DISCLAIMER_CERTIFIED : DISCLAIMER);

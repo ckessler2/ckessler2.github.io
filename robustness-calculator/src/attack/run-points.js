@@ -3,7 +3,8 @@
 // onnxruntime-web outputs evaluated in float64, not from the tf.js attack.
 //
 // Classification: each point is first bounded with CROWN (when the model is a
-// ReLU chain). Certified points are proven robust and skip the attack; the
+// ReLU chain). Certified points (CROWN, real arithmetic plus a
+// float32 margin) skip the attack; the
 // others are attacked. Each point ends up "certified", "counterexample" or
 // "unknown".
 

@@ -4,9 +4,16 @@
 // The page only contacts the runner after the user presses Connect (browsers may ask permission
 // for a public site to reach this machine), and again automatically after a reload.
 
-export const RUNNER_URL = "http://127.0.0.1:8765";
+const RUNNER_PORT = 8765;
 const SITE_ORIGIN = "https://ckessler2.github.io";
-const IMAGE = "ghcr.io/ckessler2/easynnv-runner";
+export const IMAGE = "ghcr.io/ckessler2/easynnv-runner";
+// The runner also serves this page at its own address (for browsers that block a public site from
+// reaching this machine). Served from there, the page talks to its own origin.
+export const SERVED_BY_RUNNER =
+  /^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(window.location.origin) &&
+  /^\/(index\.html)?$/.test(window.location.pathname);
+export const RUNNER_URL = SERVED_BY_RUNNER ? window.location.origin : `http://127.0.0.1:${RUNNER_PORT}`;
+const SLOW_MS = 10_000; // after this long without an answer, show what to check
 const HEARTBEAT_MS = 5_000; // notices a stopped runner quickly; the runner stops after 120 s without a request
 const CONNECT_RETRY_MS = 2_000; // while the container starts
 const CONNECT_PATIENCE_MS = 120_000;
@@ -15,6 +22,8 @@ const OUTPUT_LIMIT = 2_000_000; // characters of output kept
 const listeners = new Set();
 export const runner = {
   connection: "idle", // idle | connecting | connected | lost | wrong-token | refused
+  slow: false, // connecting for a while without an answer
+  blocked: false, // the browser's local-network permission for this site is "denied"
   error: null,
   notice: null, // a neutral message, e.g. after Disconnect
   info: null, // /status reply: versions, solvers, busy, …
@@ -44,7 +53,27 @@ const hex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0"))
 
 // The token lives in this tab's sessionStorage only: a new one for each tab session, so it is not
 // stored for the whole site, and pages in other tabs cannot read it. It survives a reload.
+// The page served by the runner receives it in the link's fragment (never sent to a server), which
+// is removed from the address bar at once.
+function tokenFromLink() {
+  const match = /[?&]token=([0-9a-f]{32})(?=&|$)/.exec(window.location.hash);
+  if (!match) return null;
+  const hash = window.location.hash.replace(/[?&]token=[0-9a-f]{32}/, "");
+  history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+  return match[1];
+}
+
 function loadToken() {
+  const linked = SERVED_BY_RUNNER ? tokenFromLink() : null;
+  if (linked) {
+    try {
+      storage("sessionStorage")?.setItem("easynnv-token", linked);
+      storage("sessionStorage")?.setItem("easynnv-connected", "1");
+    } catch {
+      /* the token then lasts until the page is reloaded */
+    }
+    return linked;
+  }
   try {
     const saved = storage("sessionStorage")?.getItem("easynnv-token");
     if (saved && /^[0-9a-f]{32}$/.test(saved)) return saved;
@@ -68,15 +97,58 @@ const TOKEN_SHA256 = hex(new Uint8Array(await crypto.subtle.digest("SHA-256", ne
 const TAB = hex(crypto.getRandomValues(new Uint8Array(8)));
 const HEADERS = { "X-EasyNNV-Token": TOKEN, "X-EasyNNV-Tab": TAB };
 
-export function startCommand() {
+export const MEMORY_CHOICES = [4, 8, 16]; // GB
+
+/** The memory limit for the runner (GB), remembered on this device. */
+export function memoryLimit() {
+  try {
+    const saved = Number(storage("localStorage")?.getItem("easynnv-memory"));
+    if (MEMORY_CHOICES.includes(saved)) return saved;
+  } catch {
+    /* default */
+  }
+  return 4;
+}
+
+export function setMemoryLimit(gb) {
+  try {
+    storage("localStorage")?.setItem("easynnv-memory", String(gb));
+  } catch {
+    /* only for this page */
+  }
+  notify();
+}
+
+/** The command that starts the runner. `image` pins a published revision (default: the newest). */
+export function startCommand({ image = null } = {}) {
   const origin = window.location.origin;
   // A page served from elsewhere (e.g. a local copy) is allowed explicitly; never "null" (file://).
-  const extraOrigin = origin === SITE_ORIGIN || !/^https?:\/\//.test(origin) ? "" : ` -e EASYNNV_ORIGINS=${origin}`;
+  const extraOrigin =
+    origin === SITE_ORIGIN || SERVED_BY_RUNNER || !/^https?:\/\//.test(origin) ? "" : ` -e EASYNNV_ORIGINS=${origin}`;
+  const memory = memoryLimit();
   return (
-    "docker run --rm --init --pull=always -p 127.0.0.1:8765:8765 --read-only --tmpfs /tmp:size=2g " +
-    "--cap-drop=ALL --security-opt=no-new-privileges --memory=4g --cpus=2 --pids-limit=256 " +
-    `-e EASYNNV_TOKEN_SHA256=${TOKEN_SHA256}${extraOrigin} ${IMAGE}`
+    `docker run --rm --init ${image ? "" : "--pull=always "}--platform=linux/amd64 ` +
+    `-p 127.0.0.1:${RUNNER_PORT}:8765 --read-only --tmpfs /tmp:size=${memory >= 8 ? memory / 2 : 2}g ` +
+    `--cap-drop=ALL --security-opt=no-new-privileges --memory=${memory}g --cpus=2 --pids-limit=256 ` +
+    `-e EASYNNV_TOKEN_SHA256=${TOKEN_SHA256}${extraOrigin} ${image ? `${IMAGE}:${image}` : IMAGE}`
   );
+}
+
+/** Opens this page as served by the runner itself, already holding this tab's token. */
+export function runnerPageUrl() {
+  return `http://127.0.0.1:${RUNNER_PORT}/#/verify?token=${TOKEN}`;
+}
+
+/** The browser's local-network permission for this page, where the browser has one (Chrome 142+). */
+async function localNetworkPermission() {
+  for (const name of ["loopback-network", "local-network-access", "local-network"]) {
+    try {
+      return (await navigator.permissions.query({ name })).state;
+    } catch {
+      /* not a permission this browser knows */
+    }
+  }
+  return null;
 }
 
 // ---- connection and heartbeat ---------------------------------------------------------------
@@ -110,6 +182,8 @@ export async function connect() {
   runner.connection = "connecting";
   runner.error = null;
   runner.notice = null;
+  runner.slow = false;
+  runner.blocked = !SERVED_BY_RUNNER && (await localNetworkPermission()) === "denied";
   notify();
   const started = Date.now();
   while (attempt === connectAttempt) {
@@ -135,6 +209,10 @@ export async function connect() {
         runner.error = "No runner found at " + RUNNER_URL + ". Start it with the command above, then press Connect.";
         notify();
         return;
+      }
+      if (!runner.slow && Date.now() - started > SLOW_MS) {
+        runner.slow = true;
+        notify();
       }
       await new Promise((resolve) => setTimeout(resolve, CONNECT_RETRY_MS));
     }

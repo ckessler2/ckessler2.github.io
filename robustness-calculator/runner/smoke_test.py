@@ -24,12 +24,12 @@ ORIGIN = "https://ckessler2.github.io"
 TOKEN = secrets.token_hex(16)
 TAB = secrets.token_hex(8)
 HERE = os.path.dirname(os.path.abspath(__file__))
-HARDENING = ["--init", "--read-only", "--tmpfs", "/tmp:size=2g", "--cap-drop=ALL",
+HARDENING = ["--platform=linux/amd64", "--init", "--read-only", "--tmpfs", "/tmp:size=2g", "--cap-drop=ALL",
              "--security-opt=no-new-privileges", "--memory=4g", "--cpus=2", "--pids-limit=256"]
 
 
-def request(path, body=None, origin=ORIGIN, token=TOKEN, host=None, content_type="application/json", tab=TAB):
-    headers = {"Content-Type": content_type}
+def request(path, body=None, origin=ORIGIN, token=TOKEN, host=None, content_type="application/json", tab=TAB, extra=None):
+    headers = {"Content-Type": content_type, **(extra or {})}
     if tab:
         headers["X-EasyNNV-Tab"] = tab
     if origin:
@@ -108,9 +108,29 @@ try:
     check("true property is proved", "proved no counterexample" in output, output)
     check("false property has a counterexample", "found a counterexample" in output, output)
     check("no colour codes in output", "\x1b[" not in output)
+    if os.environ.get("EASYNNV_SMOKE_OUTPUT"):  # the workflow checks the page's parser on it
+        with open(os.environ["EASYNNV_SMOKE_OUTPUT"], "w") as handle:
+            handle.write(output)
+
+    # The page served by the runner itself (the fallback for browsers that block the public site).
+    def get(path, host=f"127.0.0.1:{PORT}"):
+        conn = __import__("http.client").client.HTTPConnection("127.0.0.1", int(PORT), timeout=10)
+        conn.request("GET", path, headers={"Host": host})
+        reply = conn.getresponse()
+        return reply.status, reply.read()
+    status, page = get("/")
+    check("runner serves the page", status == 200 and b"easyNNV" in page)
+    check("page files only", get("/../server.py")[0] == 404 and get("/%2e%2e/server.py")[0] == 404
+          and get("/runner/example/../../../server.py")[0] == 404)
+    check("page needs the right Host", get("/", host="evil.example:8765")[0] == 403)
+    check("status lists packages", "maraboupy" in " ".join(json.loads(request("/status")[1])["versions"]["packages"]))
 
     check("wrong origin rejected", request("/status", origin="https://evil.example")[0] == 403)
     check("missing origin rejected", request("/status", origin=None)[0] == 403)
+    check("the served page's own requests accepted", request("/status", origin=None, extra={"Sec-Fetch-Site": "same-origin"})[0] == 200)
+    check("same-origin still needs the token",
+          request("/status", origin=None, token="0" * 32, extra={"Sec-Fetch-Site": "same-origin"})[0] == 401)
+    check("cross-site request without Origin rejected", request("/status", origin=None, extra={"Sec-Fetch-Site": "cross-site"})[0] == 403)
     check("wrong Host (DNS rebinding) rejected", request("/status", host=f"evil.example:{PORT}")[0] == 403)
     check("missing token rejected", request("/status", token=None)[0] == 401)
     check("wrong token rejected", request("/status", token="x" * 32)[0] == 401)

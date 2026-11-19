@@ -24,16 +24,28 @@ input box and an unsafe condition on the outputs). For each point or property
 it either **certifies** it with CROWN (a bound propagation method), finds a
 **counterexample** with a gradient attack (PGD with the APGD step schedule),
 or reports **unknown**. Results are reported as a range: certified share ≤
-exact value ≤ share without a counterexample. On every published VNN-COMP
-benchmark tried (35 settings), the range contains the published result, and
-in 23 it matches exactly. Nothing is
+exact value ≤ share without a counterexample. On the built-in VNN-COMP
+benchmarks (35 settings, chosen among those whose operators the tool
+supports), the range contains the published result in every setting and
+equals it in 23 (a comparison of aggregate ranges, not of individual points). Nothing is
 uploaded and nothing needs installing. The
 original plan is in `robustness_checker_brief.md`; Estimate's **Method** tab
 documents the method in full.
 
-Neither half is complete. Certification is sound but has no branch and
-bound, so it fails at larger ε, and the attack can miss counterexamples.
-Only a complete verifier decides every point.
+Neither half is complete. "Certified" means the CROWN bounds show that no
+input in the box changes the answer, in real arithmetic on the float64
+network (as in VNN-COMP), with a float32 safety margin; it is not a
+floating-point-sound proof. Certification has no branch and bound, so it
+fails at larger ε, and the attack can miss counterexamples (a counterexample,
+when found, is a concrete input re-checked with onnxruntime). Only a complete
+verifier decides every point.
+
+Regression around points comes in two attack-only modes: standard robustness
+(outputs move by at most δ within ε) and Lipschitz robustness (output change
+≤ L × input change), following
+[Casadio et al., CAV 2022](https://doi.org/10.1007/978-3-031-13185-1_11).
+They can show a violation but never certify, so passing points are reported
+as "no violation found".
 
 ## Using it
 
@@ -44,8 +56,12 @@ Only a complete verifier decides every point.
    property files (regression: output constraints).
 3. For points, set ε (the L∞ radius). Press **Run**.
 
-ε is in the model's own input units, so if the model expects normalised
-inputs, ε is normalised too.
+ε is in the model's own input units, so if the model normalises its inputs
+outside the ONNX file, ε (and the points) must be normalised too.
+
+Classification needs a model with at least two outputs (one logit per class)
+and CSV labels below the number of outputs; otherwise **Run** is blocked with
+a message (a single-output model always predicts class 0).
 
 **Advanced** holds:
 
@@ -101,11 +117,19 @@ Sources: [2022 results](https://github.com/VNN-COMP/vnncomp2022_results)
 
 | Check | Result |
 |---|---|
-| Unit tests (`npm test`) | 31/31 pass |
-| Classification benchmarks, default settings: 320 images in 18 settings (`node tests/benchmarks/crown.js --tasks=classification`) | 0 contradictions with published verdicts. Certified 99/142 published-robust images; counterexamples for 145/150 published-non-robust images. The range contains the published robust accuracy in all 18 settings and equals it (or the published range) in 10. |
-| Regression benchmarks, default settings: 96 properties in 17 settings (`node tests/benchmarks/crown.js --tasks=properties`) | 0 contradictions. Certified 45/64 published-safe properties; counterexamples for 29/32 published-unsafe ones. The range contains the published value in all 17 settings and equals it in 13. |
+| Unit tests (`npm test`) | 39/39 pass |
+| Classification benchmarks, default settings: 320 images in 18 settings (`node tests/benchmarks/crown.js --tasks=classification`) | No contradiction with published verdicts (no certified image is published non-robust and no counterexample is for a published-robust one; a soundness sanity check, not a measure of accuracy). Certified 99/142 published-robust images; counterexamples for 145/150 published-non-robust images. The range contains the published robust accuracy in all 18 settings and equals it (or the published range) in 10. |
+| Regression benchmarks, default settings: 96 properties in 17 settings (`node tests/benchmarks/crown.js --tasks=properties`) | No contradiction with published verdicts. Certified 45/64 published-safe properties; counterexamples for 29/32 published-unsafe ones. The range contains the published value in all 17 settings and equals it in 13. |
 | Small 2-input network vs exact branch and bound (`tests/exact-toy.test.js`, `tests/crown.test.js`) | The attack finds every non-robust point. The breaking ε is never below the exact value and at most 0.7% above it. CROWN certifies 134/142 robust (point, ε) pairs and never a non-robust one. |
 | Translation vs onnxruntime-web | Within 2·10⁻⁵ relative on all 45 ACAS Xu networks and 6·10⁻⁶ on the Collins CNNs. The CROWN layer chain matches onnxruntime on the benchmark networks (including convolutions) and ACAS Xu. |
+
+"Equals" compares the aggregate range with the published one, not
+individual verdicts. The benchmarks were chosen among those whose operators
+the tool supports (fully connected and convolutional ReLU networks) and that
+fit in a browser: the two malbeware CNNs and the six largest nn4sys
+properties were left out, and other VNN-COMP benchmarks (many with pooling,
+residual connections or other activations) were not added, so results on
+other networks may be worse.
 
 The per-benchmark tables are on Estimate's **Results** tab (`src/pages/results-page.js`).
 
@@ -163,13 +187,23 @@ Vehicle and Marabou do all the work; easyNNV only makes them easier to run.
 On the **Run** tab:
 
 1. Start the runner with the command the tab shows (it holds the SHA-256 of
-   a random token made for this browser tab), then press **Connect**. The page contacts
+   a random token made for this browser tab), then press **Connect runner**. The page contacts
    `http://127.0.0.1:8765` only after that, and checks in every 5 seconds.
+   If nothing answers within 10 seconds, or Chrome's local-network permission
+   is denied, the page lists what to check and offers the same page served by
+   the runner itself (`http://127.0.0.1:8765/`, same origin, so no browser
+   permission is needed). Memory: 4 GB by default, 8 or 16 GB selectable.
 2. Write a specification, or choose an example under **Open**: the built-in
    tiny network, or one of the Vehicle tutorial's examples (see below). The
    networks, datasets and parameters it declares each get an input, and
    **Properties** chooses which to verify.
 3. Press **Verify**. Vehicle's output appears as it runs; **Cancel** stops it.
+   Matrix-valued counterexamples (e.g. an image perturbation) are drawn next to
+   the dataset image, and **Check with the network** confirms them in the
+   browser with onnxruntime. **Run record** (under Full output) downloads a
+   JSON file with the inputs' SHA-256 hashes, the image revision and every
+   package version, the limits, the verdicts, and a `docker run` command that
+   repeats the run with exactly the same image.
 
 ### Examples
 
@@ -209,14 +243,19 @@ the design and the security measures in full.
 
 | File | What it is |
 | --- | --- |
-| `server.py` | Local HTTP server (standard library only): runs `vehicle verify`, streams its output, and checks every request (Origin, Host, token, tab id, content type); tracks open tabs; kills everything a run started and empties `/tmp` after it |
-| `Dockerfile` | `python:3.11-slim` plus the newest `vehicle-lang`, `maraboupy` and `typing-extensions` (`--no-deps`: nothing else), as an unprivileged user; nothing pinned |
-| `smoke_test.py` | Starts the image hardened, verifies `example/`, checks the request rules and that the runner stops itself |
+| `server.py` | Local HTTP server (standard library only): runs `vehicle verify`, streams its output, and checks every request (Origin, Host, token, tab id, content type); tracks open tabs; kills everything a run started and empties `/tmp` after it; also serves a copy of this page |
+| `Dockerfile` | `python:3.11-slim` plus the newest `vehicle-lang`, `maraboupy` and `typing-extensions` (`--no-deps`: nothing else), as an unprivileged user; nothing pinned; build context is `robustness-calculator/` |
+| `smoke_test.py` | Starts the image hardened, verifies `example/`, checks the request rules, the served page and that the runner stops itself |
+| `check_parser.mjs` | Runs the page's output parser on the smoke test's real Vehicle output |
 | `example/` | `spec.vcl` (one true property, one false) and its 2-input ReLU network `model.onnx` (made by `make-model.js`) |
 
 `../.github/workflows/runner-image.yml` rebuilds the image daily with the
-newest packages, runs the smoke test, and publishes
-`ghcr.io/ckessler2/easynnv-runner` only if it passes and the contents changed.
+newest packages, checks that the newest PyPI releases were really installed,
+runs the smoke test and the parser check, and publishes
+`ghcr.io/ckessler2/easynnv-runner` only if they pass and the contents changed.
+Each published image is tagged `latest`, with the date, with a content hash and
+with its revision (`YYYY-MM-DD-<commit>`, which `/status` and the run record
+report). A failed scheduled build opens an issue.
 
 The runner stops itself when the page goes: a closed tab stops a running job
 within about 4 seconds, and an idle runner stops after 2 minutes without a
@@ -226,13 +265,17 @@ To build and test it locally (needs Docker):
 
 ```sh
 cd robustness-calculator
-docker build --platform linux/amd64 -t easynnv-runner runner
+docker build --platform linux/amd64 -f runner/Dockerfile -t easynnv-runner .
 python3 runner/smoke_test.py easynnv-runner
 ```
 
 When the page is served locally (see below), the start command it shows adds
 `-e EASYNNV_ORIGINS=<that origin>`, since the runner otherwise accepts only
 `https://ckessler2.github.io`.
+
+Keep `-p 127.0.0.1:8765:8765` as it is: publishing the port on all interfaces
+(`-p 8765:8765` or `0.0.0.0`) would let other machines on your network reach
+the runner (they would still need the token).
 
 ### Security: known limits
 
@@ -259,13 +302,15 @@ These limits are known and accepted for now:
 2. **Done:** the Run tab's first version (Connect, a `.vcl` editor with an
    example, inputs for the declared networks, datasets and parameters,
    Verify and Cancel, streamed output).
-3. Testing in Chrome, Firefox and Safari.
+3. Testing in Chrome, Firefox and Safari (the page served by the runner is
+   the way round if a browser blocks the public site).
 4. VNNLib verifiers: Vehicle can compile specifications to VNNLib queries, so
    verifiers such as
    [α,β-CROWN](https://github.com/Verified-Intelligence/alpha-beta-CROWN) can
    be added to the solver list.
-5. Nicer results: verdicts and counterexamples as tables, and a better editor
-   (Vehicle includes a language server).
+5. **Done:** verdict rows, counterexamples drawn and checked with the network,
+   run records. Still to do: a better editor (Vehicle includes a language
+   server), and reading `vehicle --json` events instead of the text output.
 6. A combined mode: Estimate reads VNNLib, so it can first try Vehicle's
    compiled queries in the browser and send only the undecided ones to the
    runner.
@@ -273,8 +318,9 @@ These limits are known and accepted for now:
 ### Open questions
 
 - Browsers treat requests from a public site to your own machine
-  differently. Recent Chrome asks for permission; Safari may block them
-  entirely. To be tested.
+  differently. Recent Chrome asks for permission (the page detects a denial);
+  Safari and Brave may block them entirely. To be tested; the page served by
+  the runner avoids the question.
 - Marabou cannot express strict inequalities (x < y), so Vehicle relaxes them
   to x ≤ y and warns. Counterexamples can then sit exactly on a boundary; the
   Run tab points this out when it happens.

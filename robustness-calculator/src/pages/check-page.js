@@ -11,7 +11,8 @@ import { createRangeBar, formatPercent } from "../components/rapid-range-bar.js"
 import { createPointList, detailList } from "../components/rapid-point-list.js";
 import { createProgressTracker } from "../components/rapid-progress.js";
 import { parseVnnlib } from "../spec/vnnlib.js";
-import { TASKS } from "../spec/points.js";
+import { TASKS, classificationSetupErrors } from "../spec/points.js";
+import { friendlyError } from "../lib/errors.js";
 import { BENCHMARKS, pointFromProperty, pointsCsvText } from "../spec/benchmark.js";
 import { disclaimerFor } from "../attack/report.js";
 import { ATTACK_DEFAULTS, attackDefaultsFor } from "../attack/defaults.js";
@@ -285,7 +286,7 @@ function dataSummary(s) {
 async function startRun(ctx) {
   const { state, worker, rerender } = ctx;
   const s = state.getState();
-  if (!isReady(s) || s.run.status === "running") return;
+  if (!isReady(s) || setupErrors(s).length || s.run.status === "running") return;
   const previous = s.run.result ?? null;
   const errors = validateSettings(s);
   if (errors.length) {
@@ -347,13 +348,38 @@ function benchOptions(benches) {
   return groups;
 }
 
-/** Model warnings that matter before a run (several outputs, no certification). */
+/** An error status line in plain words; the original message stays one click away. */
+function errorLine(message) {
+  const { text, raw } = friendlyError(message);
+  const line = statusLine("error", text);
+  if (raw) {
+    const details = el("details", "rf-error-raw");
+    details.append(el("summary", "", "Details"), el("code", "", raw));
+    line.querySelector(".rf-status-text").append(details);
+  }
+  return line;
+}
+
+let setupErrorsCache = { key: null, errors: [] };
+
+/** Problems that block a run before it starts (classification with < 2 outputs, labels out of range). */
+function setupErrors(s) {
+  const ms = s.model?.summary;
+  if (!ms || s.mode !== "points" || s.pointsSettings.task !== "classification") return [];
+  const text = s.points?.text ?? "";
+  const key = `${ms.inputSize}|${ms.outputSize}|${text.length}|${text}`;
+  if (setupErrorsCache.key !== key) setupErrorsCache = { key, errors: classificationSetupErrors(ms.outputSize, text, ms.inputSize) };
+  return setupErrorsCache.errors;
+}
+
+/** Model warnings that matter before a run (several outputs, no certification, too few outputs). */
 function modelNotes(s) {
   const ms = s.model?.summary;
   const out = [];
   if (!ms) return out;
   if (ms.extraOutputs?.length) out.push(el("p", "field-hint", `Several outputs; only “${ms.outputName}” is checked.`));
   if (!ms.certifiable) out.push(el("p", "field-hint rapid-hint-warn", `No certification for this model (${ms.certifyNote}); attack only.`));
+  for (const e of setupErrors(s)) out.push(el("p", "error-text", e.text));
   return out;
 }
 
@@ -390,7 +416,7 @@ function renderBenchmarkSource(ctx, s) {
   if (loadedId) {
     const bench = benches.find((b) => b.id === loadedId);
     if (s.model?.loading) out.push(statusLine("busy", `Loading ${benchParts(bench).name}…`));
-    else if (s.model?.error) out.push(statusLine("error", s.model.error));
+    else if (s.model?.error) out.push(errorLine(s.model.error));
     else if (s.model?.summary && (s.mode === "vnnlib" ? s.vnnlib?.summary : s.points?.text)) {
       out.push(statusLine("ok", `${benchParts(bench).name} · ${dataSummary(s)}`), ...modelNotes(s));
     }
@@ -405,7 +431,7 @@ function renderFileSource(ctx, s) {
   const modelStatus = model?.loading
     ? statusLine("busy", `Loading ${model.fileName ?? "model"}…`)
     : model?.error
-      ? statusLine("error", model.error)
+      ? errorLine(model.error)
       : model?.summary
         ? statusLine("ok", `${model.fileName} · ${model.summary.inputSize} → ${model.summary.outputSize}`)
         : null;
@@ -517,8 +543,8 @@ function renderSetup(ctx) {
       info: infoTip(
         [
           "Classification robustness: the predicted class does not change anywhere within ε of each point.",
-          "Bounded change (δ): within ε of each point, no output moves by more than δ.",
-          "Lipschitz bound (L): within ε of each point, output change ≤ L × input change.",
+          "Standard robustness (δ, Casadio et al., 2022): within ε of each point, no output moves by more than δ. Attack only: it can find violations, not prove their absence.",
+          "Lipschitz robustness (L): within ε of each point, output change ≤ L × input change. Attack only.",
           "Output constraints: each VNNLIB file gives an input box and unsafe output conditions; no input in the box may reach them.",
         ],
         { href: METHOD },
@@ -567,7 +593,7 @@ function renderSetup(ctx) {
       fieldRow({
         label: "ε",
         info: infoTip("L∞ radius: every input may move by at most ε (then clipped to the input range, if set).", { href: METHOD }),
-        hint: "In the model's input units.",
+        hint: "In the model's input units: normalised too if normalisation happens outside the ONNX file.",
         control: numberInput({ name: "epsilon", value: ps.epsilon, min: 0, onChange: set("epsilon") }),
       }),
     );
@@ -649,7 +675,7 @@ function renderAdvanced(ctx) {
         label: "Certify with CROWN",
         checked: a.certify !== false,
         onChange: (v) => setA("certify")(v),
-        info: infoTip("Proves points robust (or properties safe) before attacking, using linear bounds with a float32 safety margin. Off: attack only, so results are upper bounds.", { href: METHOD, align: "end" }),
+        info: infoTip("Certifies points robust (or properties safe) with CROWN bounds before attacking: float64 bounds plus a float32 safety margin, not a floating-point-sound proof. Off: attack only, so results are upper bounds.", { href: METHOD, align: "end" }),
       }),
     );
     if (s.mode === "points" && task === "classification") {
@@ -769,7 +795,8 @@ function fillToolbar(ctx) {
   const running = s.run.status === "running";
   box.replaceChildren();
   const missing = needs(s);
-  const ready = isReady(s);
+  const blockers = isReady(s) ? setupErrors(s) : [];
+  const ready = isReady(s) && !blockers.length;
   const action = running
     ? button("Cancel", { onClick: () => ctx.worker.cancel() })
     : button("Run", { primary: true, disabled: !ready, onClick: () => startRun(ctx) });
@@ -788,8 +815,10 @@ function fillToolbar(ctx) {
     status.append(statusLine("busy", `Loading ${s.model.fileName ?? "model"}…`));
   } else if (missing.length) {
     status.append(statusLine("idle", `Needs: ${missing.join(", ")}`));
+  } else if (blockers.length) {
+    status.append(statusLine("error", blockers[0].short));
   } else if (s.run.status === "error") {
-    status.append(statusLine("error", s.run.error));
+    status.append(errorLine(s.run.error));
   } else if (s.run.status === "cancelled") {
     status.append(statusLine("warn", `Cancelled · ${dataSummary(s)}`));
   } else {
@@ -882,7 +911,7 @@ function headline(result, an) {
       main,
       sub: [`${an.counts.counterexample} unsafe`, `${an.counts.unknown} unknown`, time].join(" · "),
       info: [
-        "The lower count is properties proven safe; the higher count adds every property the attack could not break. The true number lies in between.",
+        "The lower count is properties certified safe by CROWN; the higher count adds every property the attack could not break. The true number lies in between, up to the float32 caveat on the Method page.",
         disclaimerFor(result),
       ],
     };
@@ -896,7 +925,7 @@ function headline(result, an) {
       at: `at ε = ${eps}`,
       sub: `${n} points · ${time}`,
       info: [
-        "Lower end: points proven robust by CROWN. Upper end: points the attack could not break. The true robust accuracy lies in between.",
+        "Lower end: points certified by CROWN. Upper end: points the attack could not break. The true robust accuracy lies in between, up to the float32 caveat on the Method page.",
         disclaimerFor(result),
       ],
     };
@@ -906,10 +935,10 @@ function headline(result, an) {
   const limit = lip ? s.lipschitz : s.delta;
   if (limit !== null && limit !== undefined && sm.passCount !== undefined) {
     return {
-      main: `At most ${sm.passCount} of ${n} points within ${lip ? "L" : "δ"} = ${formatNumber(limit, 3)}`,
-      at: `at ε = ${eps}`,
+      main: `No violation found for ${sm.passCount} of ${n} points`,
+      at: `at ε = ${eps}, ${lip ? "L" : "δ"} = ${formatNumber(limit, 3)}`,
       sub: `${n} points · ${time}`,
-      info: ["“Within” means the attack found no violation, which is not a proof; a violation is a concrete input.", disclaimerFor(result)],
+      info: ["The attack found no input breaking the bound at these points, which is not a proof; a violation is a concrete input.", disclaimerFor(result)],
     };
   }
   return {
@@ -982,7 +1011,7 @@ function renderResults(ctx) {
     panel.append(
       emptyState({
         title: "Check a network's robustness",
-        text: s.run.status === "running" ? "Running… results appear here when it finishes." : isReady(s) ? "Ready. Press Run; results appear here." : "Pick a benchmark or open your own model, then Run.",
+        text: s.run.status === "running" ? "Running… results appear here when it finishes." : isReady(s) && !setupErrors(s).length ? "Ready. Press Run; results appear here." : "Pick a benchmark or open your own model, then Run.",
         actions,
       }),
     );
@@ -1165,7 +1194,7 @@ function pointsView(ctx, result, an, w) {
         box.append(
           detailList([
             crown && r.certifiedSlack !== undefined
-              ? { label: "Slack ≥ (CROWN)", value: r.certifiedSlack === Infinity ? "∞" : formatNumber(r.certifiedSlack, 4), note: "Proven distance from the unsafe condition; above 0 (plus float32 margin) means safe." }
+              ? { label: "Slack ≥ (CROWN)", value: r.certifiedSlack === Infinity ? "∞" : formatNumber(r.certifiedSlack, 4), note: "CROWN lower bound on the distance from the unsafe condition; above 0 (plus float32 margin) means certified." }
               : null,
             r.certifiedBySplitting ? { label: "Certified by", value: `splitting the box into ${r.splitPieces} pieces` } : null,
             r.bestMargin !== undefined ? { label: "Margin ≤ (attack)", value: formatNumber(r.bestMargin, 4), note: "Lowest unsafe-condition margin reached; ≤ 0 means a counterexample." } : null,
@@ -1202,10 +1231,10 @@ function pointsView(ctx, result, an, w) {
         box.append(
           detailList([
             pred,
-            crown && r.certifiedBound !== undefined ? { label: "Margin ≥ (CROWN)", value: formatNumber(r.certifiedBound, 4), note: "Proven lower bound over the ε-ball; above 0 (plus float32 margin) means robust." } : null,
+            crown && r.certifiedBound !== undefined ? { label: "Margin ≥ (CROWN)", value: formatNumber(r.certifiedBound, 4), note: "CROWN lower bound over the ε-ball; above 0 (plus float32 margin) means certified." } : null,
             r.bestMargin !== undefined ? { label: "Margin ≤ (attack)", value: formatNumber(r.bestMargin, 4), note: "Lowest margin the attack reached; below 0 means a counterexample." } : null,
             s.searchEpsilon && crown && r.cleanCorrect
-              ? { label: "Certified up to ε", value: r.certifiedRadiusAtLeastEpsilon ? `≥ ${formatNumber(s.epsilon, 4)}` : formatNumber(r.certifiedRadius, 4), note: "Largest ε CROWN proves (bisection)." }
+              ? { label: "Certified up to ε", value: r.certifiedRadiusAtLeastEpsilon ? `≥ ${formatNumber(s.epsilon, 4)}` : formatNumber(r.certifiedRadius, 4), note: "Largest ε CROWN certifies (bisection)." }
               : null,
             s.searchEpsilon && r.cleanCorrect
               ? {

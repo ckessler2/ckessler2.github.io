@@ -7,8 +7,8 @@
 
 export const TASKS = {
   classification: "Classification robustness (ε-ball)",
-  "regression-standard": "Regression robustness: bounded change (δ)",
-  "regression-lipschitz": "Regression robustness: Lipschitz bound (L)",
+  "regression-standard": "Regression: standard robustness (δ), attack only",
+  "regression-lipschitz": "Regression: Lipschitz robustness (L), attack only",
   properties: "Output constraints (VNNLIB file)",
 };
 
@@ -46,6 +46,34 @@ export function parsePointsCsv(text, inputSize, task) {
   });
 
   return { inputs, labels, extraColumns: rows[0].length - inputSize - (needLabel ? 1 : 0) };
+}
+
+/**
+ * Problems that make a classification check meaningless, before running:
+ * fewer than two outputs (argmax is then always 0), or a CSV label that is
+ * not an output index. Returns a list of { short, text } messages (empty when fine). CSV
+ * errors other than labels are left to the run, which reports them.
+ */
+export function classificationSetupErrors(outputSize, csvText, inputSize) {
+  if (outputSize < 2) {
+    return [
+      {
+        short: `Can't run: the model has ${outputSize} output; classification needs one per class.`,
+        text: `The model has ${outputSize} output, so every point is classified as class 0 and robustness is meaningless. Export one output (logit) per class, or use a regression property.`,
+      },
+    ];
+  }
+  if (!csvText) return [];
+  let labels;
+  try {
+    ({ labels } = parsePointsCsv(csvText, inputSize, "classification"));
+  } catch {
+    return [];
+  }
+  const bad = labels.findIndex((l) => l >= outputSize);
+  if (bad < 0) return [];
+  const text = `CSV row ${bad + 1}: label ${labels[bad]}, but the model has only ${outputSize} outputs (labels 0–${outputSize - 1}).`;
+  return [{ short: `Can't run: ${text}`, text }];
 }
 
 /** "" -> null, "0" -> [0,0,...], "0,1,2" -> [0,1,2]. */

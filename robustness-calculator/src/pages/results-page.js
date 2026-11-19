@@ -60,7 +60,7 @@ function publishedTotals(task) {
   return totals;
 }
 
-/** Totals for one task: instances, the tool's verdicts, the published ones, exact matches. */
+/** Totals for one task: instances, the tool's verdicts, the published ones, cases whose range string equals the published one. */
 function summarise(rows, task) {
   const sum = (i) => rows.reduce((a, r) => a + r[i], 0);
   return {
@@ -79,7 +79,7 @@ const TASKS = {
     task: "classification",
     words: { setting: "ε", units: "Images", unit: "images", safe: "robust", unsafe: "not robust" },
     notes: [
-      [el("strong", "", "Where it struggles: "), "at larger ε (especially 2022 mnist_fc at ε = 0.05), certification proves very few images, so the range stays wide."],
+      [el("strong", "", "Where it struggles: "), "at larger ε (especially 2022 mnist_fc at ε = 0.05), certification covers very few images, so the range stays wide."],
       [el("strong", "", "Attack limits: "), "it misses 5 of 150 published non-robust images, so the upper bound can be too high in a few cases (for example CORA CIFAR-10 trades)."],
     ],
   },
@@ -119,18 +119,18 @@ function taskPanel(key) {
   const tiles = el("ul", "docs-tiles");
   tiles.append(
     tile({
-      label: "Agrees with published",
+      label: "No contradiction with published verdicts",
       value: `${t.cases} / ${t.cases}`,
       unit: "cases",
-      sub: "0 contradictions",
-      help: "In every benchmark case the tool's range of robust accuracy overlaps the published answer: no instance the tool decides contradicts a published verdict.",
+      sub: `0 contradictions in ${t.instances} ${words.unit}`,
+      help: `A soundness sanity check, not a measure of accuracy: no ${words.unit === "images" ? "image" : "property"} certified here is published as ${words.unsafe}, and no counterexample found here is for one published as ${words.safe}. Unknown answers never contradict.`,
     }),
     tile({
-      label: "Exact match",
+      label: "Range equals published",
       value: `${t.exact} / ${t.cases}`,
       unit: "cases",
       sub: `${pct(t.exact, t.cases)} %`,
-      help: "The tool's range equals the published value (or the published range, where verifiers left instances undecided).",
+      help: "The tool's aggregate range equals the published value (or the published range, where verifiers left instances undecided). This compares the aggregate ranges, not the verdicts of individual points.",
     }),
     tile({
       label: `Recovered: ${words.safe}`,
@@ -159,18 +159,18 @@ function taskPanel(key) {
       { label: "Published verifiers", values: t.published },
     ],
   });
-  const barsNote = el("p", "docs-figure-note", "Every decided case agrees with the published verdicts. ");
+  const barsNote = el("p", "docs-figure-note", "No decided instance contradicts its published verdict. ");
   barsNote.append(
-    info(`The same ${t.instances} ${words.unit}, judged by this tool and by the published competition verifiers. Unknown means undecided. This tool leaves more instances unknown, but the ones it decides agree with the published verdicts.`),
+    info(`The same ${t.instances} ${words.unit}, judged by this tool and by the published competition verifiers. Unknown means undecided. This tool leaves more instances unknown; none of the ones it decides contradicts a published verdict.`),
   );
 
   const tableRows = rows.map((r) => {
     const exact = r[6] === r[7];
-    const match = el("span", exact ? "is-exact" : "is-range", exact ? "exact" : "contains");
+    const match = el("span", exact ? "is-exact" : "is-range", exact ? "equal" : "contains");
     return [...r.map(String), match];
   });
   const tableNode = table(
-    ["Benchmark", words.setting, words.units, "Certified", "Counter­example", "Unknown", "Tool’s range", "Published", "Match"],
+    ["Benchmark", words.setting, words.units, "Certified", "Counter­example", "Unknown", "Tool’s range", "Published", "Range"],
     tableRows,
   );
 
@@ -178,7 +178,7 @@ function taskPanel(key) {
   left.append(tiles, bars, barsNote, bullets(notes));
   const right = el("div", "docs-results-col");
   const tableHead = el("h3", "docs-h3", `Per benchmark case (${t.cases} cases, ${t.instances} ${words.unit}) `);
-  tableHead.append(info("Each row is one benchmark at one ε or variant. “contains”: the tool's range is wider than the published answer but contains it."));
+  tableHead.append(info("Each row is one benchmark at one ε or variant. “equal”: the tool's range equals the published one; “contains”: it is wider but contains it. Both compare aggregate ranges, not individual verdicts."));
   right.append(tableHead, tableNode);
 
   const panel = el("div", "docs-results-panel");
@@ -200,9 +200,13 @@ export function renderResultsPage() {
     pageTitle("Results", "Estimate against the published verdicts of the VNN-COMP complete verifiers, on the built-in benchmarks."),
     inShort(
       bullets([
-        [el("strong", "", "No contradictions. "), `Across ${instances} instances in ${cases} benchmark cases, every verdict Estimate reaches agrees with the published one.`],
         [
-          el("strong", "", `Exact in ${c.exact + r.exact} of ${cases} cases `),
+          el("strong", "", "No contradiction with published verdicts. "),
+          `Across ${instances} instances in ${cases} benchmark cases, nothing Estimate certifies is published unsafe and no counterexample it finds is published safe. `,
+          info("A soundness sanity check, not a measure of accuracy: unknown answers never contradict."),
+        ],
+        [
+          el("strong", "", `Range equals published in ${c.exact + r.exact} of ${cases} cases `),
           `(classification ${c.exact}/${c.cases}, regression ${r.exact}/${r.cases}), often in seconds to about a minute. Elsewhere the range is wider but contains the published answer.`,
         ],
         [
@@ -210,6 +214,10 @@ export function renderResultsPage() {
           `${pct(c.tool.certified + r.tool.certified, c.published.certified + r.published.certified)} % of published robust or safe instances are certified; ${pct(c.tool.counterexample + r.tool.counterexample, c.published.counterexample + r.published.counterexample)} % of published not-robust or unsafe ones get a counterexample.`,
         ],
         [el("strong", "", "The gaps "), "are certification at larger ε and on large regression boxes, and a few counterexamples the attack misses."],
+        [
+          el("strong", "", "Chosen benchmarks. "),
+          "Only benchmarks whose operators the tool supports (fully connected and convolutional ReLU networks) and that fit in a browser; the malbeware CNNs and the six largest nn4sys properties were left out. Expect less on other networks.",
+        ],
       ]),
     ),
   );
@@ -246,7 +254,7 @@ export function renderResultsPage() {
     el("h2", "", "Where the gaps come from"),
     p("Built for fast checks in the browser, the tool leaves some cases uncertain, for three reasons:"),
     bullets([
-      [el("strong", "", "Certification (lower bound): "), "on harder cases, especially 2022 mnist_fc 6×256 at ε = 0.05, few robust images are proven, so the lower bound can sit far below the published value."],
+      [el("strong", "", "Certification (lower bound): "), "on harder cases, especially 2022 mnist_fc 6×256 at ε = 0.05, few robust images are certified, so the lower bound can sit far below the published value."],
       [el("strong", "", "Attack (upper bound): "), "it misses 5 of 150 published non-robust classification images, which can leave the upper bound too high in a few cases."],
       [el("strong", "", "Undecided cases: "), `where the published complete verifiers were undecided, this tool usually is too (${c.published.unknown} classification images).`],
     ]),
@@ -255,7 +263,7 @@ export function renderResultsPage() {
   other.append(
     el("h2", "", "Other checks"),
     bullets([
-      [el("strong", "", "Toy network with exact ground truth: "), "the attack finds every non-robust point, and certification never falsely proves a non-robust case."],
+      [el("strong", "", "Toy network with exact ground truth: "), "the attack finds every non-robust point, and certification never certifies a non-robust case."],
       [el("strong", "", "Model translation: "), "the ONNX-to-tf.js translation is cross-checked against onnxruntime-web on ACAS Xu and the benchmark networks."],
       ["Rerun all of this with ", code("node tests/benchmarks/crown.js"), " and ", code("npm test"), "."],
     ]),

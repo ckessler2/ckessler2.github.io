@@ -2,6 +2,8 @@
 # publishes it to ghcr.io/ckessler2/easynnv-runner. Runs daily, so the image tracks new releases.
 # An image is published only if the smoke test passes and something changed (base image,
 # any installed package version, or the runner's own files), so users don't re-download daily.
+# Each published image is also tagged with its revision (date-commit), which /status reports, so a
+# run can be repeated with exactly the same image. A failed scheduled build opens an issue.
 name: Runner image
 
 on:
@@ -10,13 +12,14 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["robustness-calculator/runner/**", ".github/workflows/runner-image.yml"]
+    paths: ["robustness-calculator/**", "!robustness-calculator/**/*.md", ".github/workflows/runner-image.yml"]
   pull_request:
-    paths: ["robustness-calculator/runner/**", ".github/workflows/runner-image.yml"]
+    paths: ["robustness-calculator/**", "!robustness-calculator/**/*.md", ".github/workflows/runner-image.yml"]
 
 permissions:
   contents: read
   packages: write
+  issues: write  # only to report a failed scheduled build
 
 env:
   IMAGE: ghcr.io/ckessler2/easynnv-runner
@@ -25,31 +28,50 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
         with:
           persist-credentials: false  # nothing later needs git credentials
 
       - name: Build with the newest packages
-        working-directory: robustness-calculator/runner
+        working-directory: robustness-calculator
         run: |
+          revision="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}"
+          echo "REVISION=$revision" >> "$GITHUB_ENV"
           docker pull python:3.11-slim  # also recorded in the fingerprint below
           docker build --pull --no-cache --platform linux/amd64 \
-            --build-arg REVISION="$(date -u +%Y-%m-%d)-${GITHUB_SHA::7}" -t candidate .
+            --build-arg REVISION="$revision" -f runner/Dockerfile -t candidate .
+
+      - name: Check the newest releases were installed
+        run: |
+          for package in vehicle-lang maraboupy; do
+            newest="$(curl -fsS "https://pypi.org/pypi/$package/json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
+            installed="$(docker run --rm --entrypoint pip candidate show "$package" | sed -n 's/^Version: //p')"
+            echo "$package: installed $installed, newest $newest"
+            # A newest release without a build for this image (e.g. no Python 3.11 wheel) would
+            # otherwise be skipped silently in favour of an older one.
+            [ "$installed" = "$newest" ] || { echo "::error::$package $newest has no build for this image; $installed was installed"; exit 1; }
+          done
 
       - name: Smoke test
+        env:
+          EASYNNV_SMOKE_OUTPUT: ${{ runner.temp }}/vehicle-output.txt
         run: python3 robustness-calculator/runner/smoke_test.py candidate
+
+      - name: The page reads Vehicle's output
+        run: node robustness-calculator/runner/check_parser.mjs "$RUNNER_TEMP/vehicle-output.txt"
 
       - name: Fingerprint the contents
         id: fingerprint
-        working-directory: robustness-calculator/runner
+        working-directory: robustness-calculator
         run: |
           {
             docker image inspect python:3.11-slim --format '{{index .RepoDigests 0}}'
             docker run --rm --entrypoint pip candidate freeze
-            cat Dockerfile server.py
-          } > contents.txt
-          { echo '### Image contents'; echo '```'; cat contents.txt | head -40; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          echo "tag=c-$(sha256sum contents.txt | cut -c1-16)" >> "$GITHUB_OUTPUT"
+            cat runner/Dockerfile runner/server.py
+            find index.html style.css css src runner/example -type f | sort | xargs sha256sum
+          } > "$RUNNER_TEMP/contents.txt"
+          { echo '### Image contents'; echo '```'; head -40 "$RUNNER_TEMP/contents.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          echo "tag=c-$(sha256sum "$RUNNER_TEMP/contents.txt" | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       # Only main publishes: pull requests and manual runs on other branches just build and test.
       - name: Publish if anything changed
@@ -64,7 +86,20 @@ jobs:
             echo "Nothing changed since the published image ($TAG); not publishing."
             exit 0
           fi
-          for tag in "$TAG" "$(date -u +%Y-%m-%d)" latest; do
+          for tag in "$TAG" "$REVISION" "$(date -u +%Y-%m-%d)" latest; do
             docker tag candidate "$IMAGE:$tag"
             docker push "$IMAGE:$tag"
           done
+          echo "Published $IMAGE:$REVISION ($TAG)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report a failed scheduled build
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Runner image build failed"
+          if [ -z "$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$title in:title" --json number --jq '.[].number')" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" \
+              --body "The daily build of the easyNNV runner image failed: $RUN_URL. Users keep the last published image until it is fixed."
+          fi

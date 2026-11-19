@@ -58,11 +58,27 @@ function displayToggles(appState, state, render) {
   return box;
 }
 
+const REPO = "https://github.com/ckessler2/ckessler2.github.io";
+
 function footer() {
   const node = el("footer", "site-footer");
-  const home = el("a", "inline-link", "Homepage");
-  home.href = "../index.html";
-  node.append("easyNNV: neural network verification from your browser · by Colin Kessler (", home, ")");
+  const link = (text, href) => {
+    const a = el("a", "inline-link", text);
+    a.href = href;
+    return a;
+  };
+  node.append(
+    "easyNNV: neural network verification from your browser · by Colin Kessler (",
+    link("Homepage", "https://ckessler2.github.io/"),
+    ") · ",
+    link("Source", `${REPO}/tree/main/robustness-calculator`),
+    " · ",
+    link("Issues", `${REPO}/issues`),
+    " · ",
+    link("Cite", `${REPO}/blob/main/robustness-calculator/CITATION.cff`),
+    " · ",
+    link("MIT licence", `${REPO}/blob/main/robustness-calculator/LICENSE`),
+  );
   return node;
 }
 
@@ -81,6 +97,7 @@ export function createRouter(root, state, worker) {
       /* storage unavailable: the settings last for this visit */
     }
     root.replaceChildren();
+    document.title = `${routes[activeRoute].label} · ${routes[activeRoute].group} · easyNNV`;
 
     const shell = el("div", "site-shell");
     const header = el("header", "site-header");

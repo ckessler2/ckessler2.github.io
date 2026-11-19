@@ -37,6 +37,14 @@ TOKEN_SHA256 = os.environ.get("EASYNNV_TOKEN_SHA256", "").strip().lower()
 ORIGINS = set(os.environ.get("EASYNNV_ORIGINS", "https://ckessler2.github.io").split()) - {"null"}
 HOST_PORT = os.environ.get("EASYNNV_HOST_PORT", "8765")  # the port as published on the host
 HOSTS = {f"127.0.0.1:{HOST_PORT}", f"localhost:{HOST_PORT}"}
+# The image also serves the page itself, for browsers that block a public site from reaching this
+# machine. That page's own origin is then allowed too; it is served only from this folder.
+SITE = os.path.realpath(os.environ.get("EASYNNV_SITE", "/app/site"))
+if os.path.isdir(SITE):
+    ORIGINS |= {f"http://127.0.0.1:{HOST_PORT}", f"http://localhost:{HOST_PORT}"}
+SITE_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
+              ".css": "text/css; charset=utf-8", ".vcl": "text/plain; charset=utf-8",
+              ".onnx": "application/octet-stream", ".json": "application/json", ".svg": "image/svg+xml"}
 IDLE_TIMEOUT = float(os.environ.get("EASYNNV_IDLE_TIMEOUT", "120"))  # seconds without a tab
 SHUTDOWN_GRACE = 10.0  # after the last tab closes, a reloaded page has this long to reconnect
 MAX_TIMEOUT = int(os.environ.get("EASYNNV_MAX_TIMEOUT", "3600"))
@@ -102,7 +110,17 @@ def versions():
         "maraboupy": package("maraboupy"),
         "python": platform.python_version(),
         "image": os.environ.get("EASYNNV_IMAGE_REVISION", "unknown"),
+        "packages": packages(),
     }
+
+
+def packages():
+    """Every installed package and version (pip freeze at build time), for reproducible records."""
+    try:
+        with open("/app/packages.txt") as handle:
+            return [line.strip() for line in handle if "==" in line]
+    except OSError:
+        return []
 
 
 VERSIONS = versions()
@@ -236,7 +254,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.header("Host") not in HOSTS:  # defeats DNS rebinding
             self.reply(403, {"error": "wrong Host"}, cors=False)
             return False
-        if self.header("Origin") not in ORIGINS:  # also rejects requests with no Origin at all
+        # Browsers leave out Origin on same-origin GETs: then only the page this runner serves
+        # (Sec-Fetch-Site, which pages cannot set) may go on. Anything else needs an allowed Origin.
+        same_origin = self.header("Origin") is None and self.header("Sec-Fetch-Site") == "same-origin"
+        if not (same_origin and os.path.isdir(SITE)) and self.header("Origin") not in ORIGINS:
             self.reply(403, {"error": "origin not allowed"}, cors=False)
             return False
         if self.headers.get("Transfer-Encoding") is not None:
@@ -252,6 +273,8 @@ class Handler(BaseHTTPRequestHandler):
         return True
 
     def cors_headers(self):
+        if self.header("Origin") is None:  # same-origin request: no CORS headers needed
+            return
         self.send_header("Access-Control-Allow-Origin", self.header("Origin"))
         self.send_header("Vary", "Origin")
 
@@ -289,6 +312,30 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             return True
 
+    def serve_site(self):
+        """The page's own files (public, read-only): no token needed, but the Host is checked."""
+        if self.header("Host") not in HOSTS:
+            return self.reply(403, {"error": "wrong Host"}, cors=False)
+        path = self.path.split("?", 1)[0].split("#", 1)[0]
+        if path in ("", "/"):
+            path = "/index.html"
+        file = os.path.realpath(os.path.join(SITE, path.lstrip("/")))
+        kind = SITE_TYPES.get(os.path.splitext(file)[1])
+        if not file.startswith(SITE + os.sep) or kind is None or not os.path.isfile(file):
+            return self.reply(404, {"error": "not found"}, cors=False)
+        with open(file, "rb") as handle:
+            data = handle.read()
+        self.send_response(200)
+        self.send_header("Content-Type", kind)
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.end_headers()
+        self.wfile.write(data)
+
     # --- endpoints ------------------------------------------------------------
 
     def do_OPTIONS(self):  # CORS preflight
@@ -305,6 +352,8 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
+        if self.path != "/status" and os.path.isdir(SITE):
+            return self.serve_site()
         if not self.allowed():
             return
         if self.path != "/status":

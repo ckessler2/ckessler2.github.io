@@ -19,13 +19,21 @@ function link(href, text, className, current) {
 }
 
 /** Estimate | Verify: each opens its tool's first tab. */
+// What each tool is, shown on hover (the Method tabs say more).
+const TOOL_SUMMARIES = {
+  Estimate: "Estimate: bounds on robust accuracy for an ONNX model, in the browser (incomplete, no install)",
+  Verify: "Verify: prove Vehicle specifications with Marabou (complete; runs in Docker on your machine)",
+};
+
 export function renderToolSwitch(routes, activeRoute) {
   const nav = document.createElement("nav");
   nav.className = "tool-switch segmented";
   nav.setAttribute("aria-label", "Tool");
   const active = routes[activeRoute].group;
   for (const [group, entries] of groupsOf(routes)) {
-    nav.append(link(`#/${entries[0][0]}`, group, "tool-link", group === active));
+    const node = link(`#/${entries[0][0]}`, group, "tool-link", group === active);
+    if (TOOL_SUMMARIES[group]) node.title = TOOL_SUMMARIES[group];
+    nav.append(node);
   }
   return nav;
 }

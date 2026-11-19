@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use easyNNV, please cite it as below."
+title: "easyNNV: neural network verification from your browser"
+type: software
+authors:
+  - family-names: Kessler
+    given-names: Colin
+repository-code: "https://github.com/ckessler2/ckessler2.github.io/tree/main/robustness-calculator"
+url: "https://ckessler2.github.io/robustness-calculator/"
+license: MIT
+date-released: "2026-11-19"

@@ -711,3 +711,94 @@ details.vw-row[open] > summary .vw-row-head::after {
   font-weight: 400;
   text-decoration: none;
 }
+
+.vw-command-meta {
+  align-items: center;
+}
+
+.vw-memory {
+  font: inherit;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: inherit;
+}
+
+/* Not connecting: what to check, and the page served by the runner as a way round. */
+.vw-trouble {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: var(--font-size-small);
+}
+
+.vw-trouble p {
+  margin: 0;
+}
+
+.vw-trouble-title {
+  font-weight: 600;
+}
+
+.vw-trouble-list {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: 4px;
+}
+
+/* Counterexamples drawn as images */
+.vw-cex {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+
+.vw-cex-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.vw-cex-figure {
+  margin: 0;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+  font-size: var(--font-size-small);
+  color: var(--muted);
+}
+
+.vw-cex-canvas {
+  width: 112px;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.vw-cex-result {
+  margin: 0;
+  font-size: var(--font-size-small);
+}
+
+.vw-cex-result.is-confirmed {
+  color: var(--ok, inherit);
+}
+
+.vw-cex-raw summary {
+  font-size: var(--font-size-small);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.vw-cex-raw pre {
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+}

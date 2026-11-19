@@ -11,9 +11,15 @@ import {
   startCommand,
   runJob,
   cancelJob,
+  memoryLimit,
+  setMemoryLimit,
+  MEMORY_CHOICES,
+  runnerPageUrl,
+  IMAGE,
 } from "../vehicle/runner-client.js";
 import { displayText, parseVehicleOutput, verdictLabel } from "../vehicle/output.js";
 import { EXAMPLES, EXAMPLE_GROUPS, TUTORIAL_COMMIT, TUTORIAL_REPO, fetchExample } from "../vehicle/examples.js";
+import { asMatrix, confirmCounterexample, datasetMatrix, drawMatrix, parseIdx } from "../vehicle/counterexample.js";
 
 // Verify Run tab: a .vcl editor beside the result. The toolbar holds the one main action
 // (Connect runner / Verify / Cancel), the specification's inputs and the runner's status. Runner
@@ -47,7 +53,7 @@ const view = {
   expanded: new Map(), // property name -> open
 };
 
-let lastRun = null; // { signature, properties } of the latest Verify
+let lastRun = null; // { signature, properties, job, info, memory, started } of the latest Verify
 let current = null; // { page, refresh, setSpec, focusLine } of the latest render
 
 subscribe(() => {
@@ -100,21 +106,26 @@ function verify() {
   const found = declarations(form.specification);
   if (!canVerify(found)) return;
   const chosen = selectedProperties(found);
-  lastRun = { signature: signature(found), properties: chosen };
   view.expanded.clear();
   view.fullOutputOpen = false;
   const pick = (all, names) => Object.fromEntries(names.map((n) => [n, all[n]]));
-  runJob(
-    {
-      specification: form.specification,
-      networks: pick(form.networks, found.networks),
-      datasets: pick(form.datasets, found.datasets),
-      parameters: pick(form.parameters, found.parameters),
-      properties: chosen.length < found.properties.length ? chosen : [],
-      timeout: form.timeout,
-    },
-    scheduleOutput,
-  );
+  const job = {
+    specification: form.specification,
+    networks: pick(form.networks, found.networks),
+    datasets: pick(form.datasets, found.datasets),
+    parameters: pick(form.parameters, found.parameters),
+    properties: chosen.length < found.properties.length ? chosen : [],
+    timeout: form.timeout,
+  };
+  lastRun = {
+    signature: signature(found),
+    properties: chosen,
+    job,
+    info: runner.info,
+    memory: memoryLimit(),
+    started: new Date().toISOString(),
+  };
+  runJob(job, scheduleOutput);
 }
 
 // Streamed output: redraw the result pane at most once per frame.
@@ -514,7 +525,7 @@ function renderSetup() {
   box.append(title);
   title.append(
     info(
-      `Verification runs in a Docker container on your own machine. This page talks only to ${RUNNER_URL}, and only after you press Connect. Your browser may ask to allow this.`,
+      `Verification runs in a Docker container on your own machine. This page talks only to ${RUNNER_URL}, and only after you press Connect runner. Your browser may ask to allow this.`,
       METHOD,
     ),
   );
@@ -533,15 +544,32 @@ function renderSetup() {
   const commandLine = el("div", "vw-command");
   const commandText = el("code", view.showFullCommand ? "vw-command-text is-full" : "vw-command-text", startCommand());
   commandText.title = view.showFullCommand ? "" : "Show full command to read it all";
-  commandLine.append(commandText, copyButton(startCommand));
+  commandLine.append(commandText, copyButton(() => startCommand()));
   const toggle = el("button", "vw-link-button", view.showFullCommand ? "Hide full command" : "Show full command");
   toggle.type = "button";
   toggle.addEventListener("click", () => {
     view.showFullCommand = !view.showFullCommand;
     current?.refreshOutput();
   });
+  const memory = document.createElement("select");
+  memory.className = "vw-memory";
+  memory.setAttribute("aria-label", "Memory for the runner");
+  for (const gb of MEMORY_CHOICES) {
+    const option = el("option", "", `${gb} GB memory`);
+    option.value = String(gb);
+    option.selected = gb === memoryLimit();
+    memory.append(option);
+  }
+  memory.addEventListener("change", () => setMemoryLimit(Number(memory.value)));
   const commandMeta = el("div", "vw-command-meta");
-  commandMeta.append(toggle, el("span", "", "First start downloads about 650 MB"));
+  commandMeta.append(
+    toggle,
+    memory,
+    el("span", "", "First start downloads about 650 MB"),
+    info(
+      "The image is built for x86 (Marabou has no ARM build), so Apple Silicon Macs run it under emulation, several times slower. More memory lets larger datasets fit; Docker Desktop must have at least that much (Settings → Resources).",
+    ),
+  );
   command.append(el("span", "", "Run in a terminal"), commandLine, commandMeta);
 
   const press = el("li");
@@ -552,7 +580,7 @@ function renderSetup() {
       button("Stop waiting", { onClick: stopConnecting }),
     );
   } else {
-    press.append(button("Connect", { primary: true, onClick: connect }));
+    press.append(el("span", "", "Press "), el("strong", "", "Connect runner"));
   }
   steps.append(docker, command, press);
   box.append(steps);
@@ -574,6 +602,34 @@ function renderSetup() {
   } else if (runner.notice) {
     title.after(hint(runner.notice));
   }
+  if (runner.blocked || runner.slow || (runner.error && runner.connection === "idle")) box.append(renderTroubleshooting());
+  return box;
+}
+
+/** What to check when the page cannot reach the runner, with the page served by the runner as a way round. */
+function renderTroubleshooting() {
+  const box = el("div", "vw-trouble");
+  const link = el("a", "inline-link", "Open this page from the runner ↗");
+  link.href = runnerPageUrl();
+  link.target = "_blank";
+  link.rel = "noopener";
+  if (runner.blocked) {
+    box.append(
+      el("p", "error-text", "Your browser blocks this site from reaching your computer."),
+      hint("Allow local network access in the site settings (the icon left of the address), then press Connect runner again, or:"),
+      link,
+    );
+    return box;
+  }
+  const list = el("ul", "vw-trouble-list");
+  list.append(
+    el("li", "", "Is the terminal showing “easyNNV runner ready”? The first start downloads the image first."),
+    el("li", "", "Did the browser ask to allow access to your computer or local network? Allow it."),
+  );
+  const fallback = el("li");
+  fallback.append("Safari, Brave and some settings block this site from reaching the runner. ", link, " instead (the runner must be running).");
+  list.append(fallback);
+  box.append(el("p", "vw-trouble-title", "Not connecting?"), list);
   return box;
 }
 
@@ -692,6 +748,11 @@ function renderRow(row, strict) {
   if (row.values?.length) {
     const values = el("div", "vw-values");
     for (const value of row.values) {
+      const matrix = asMatrix(value.raw);
+      if (matrix) {
+        values.append(renderPictures(row, value, matrix));
+        continue;
+      }
       const line = el("div", "vw-value", value.name ? `${value.name} = ${value.text}` : value.text);
       if (value.raw !== value.text) line.title = `Vehicle printed: ${value.raw}`;
       values.append(line);
@@ -706,6 +767,75 @@ function renderRow(row, strict) {
     details.append(list);
   }
   return details;
+}
+
+// ---- counterexamples as pictures -----------------------------------------------------------------
+
+/** The dataset of images and the dataset of labels the last run used, by shape. */
+function runDatasets(height, width) {
+  const parsed = Object.values(lastRun?.job?.datasets ?? {}).map((d) => parseIdx(d.bytes));
+  const images = parsed.find((d) => d?.dims.length === 3 && d.dims[1] === height && d.dims[2] === width);
+  const labels = parsed.find((d) => d?.dims.length === 1 && images && d.dims[0] === images.dims[0]);
+  return { images, labels };
+}
+
+function figure(canvas, caption) {
+  const box = el("figure", "vw-cex-figure");
+  box.append(canvas, el("figcaption", "", caption));
+  return box;
+}
+
+/** A matrix-valued counterexample: drawn, with the dataset image it perturbs and a check by the network. */
+function renderPictures(row, value, matrix) {
+  const box = el("div", "vw-cex");
+  const name = value.name ?? "value";
+  const flat = matrix.flat();
+  const isImage = !/perturb|delta|noise/i.test(name) && flat.every((x) => x >= 0 && x <= 1);
+  const index = /!(\d+)$/.exec(row.name)?.[1];
+  const { images, labels } = runDatasets(matrix.length, matrix[0].length);
+  const original = !isImage && index != null ? datasetMatrix(images, Number(index), matrix.length, matrix[0].length) : null;
+  const pictures = el("div", "vw-cex-pictures");
+  if (original) pictures.append(figure(drawMatrix(original, { label: `dataset image ${index}` }), `image ${index}`));
+  pictures.append(
+    figure(
+      drawMatrix(matrix, { diverging: !isImage, label: name }),
+      isImage ? name : `${name} (red +, blue −, max ${Math.max(...flat.map(Math.abs)).toPrecision(2)})`,
+    ),
+  );
+  box.append(pictures);
+
+  const networks = Object.values(lastRun?.job?.networks ?? {});
+  if (original && labels && networks.length === 1) {
+    const label = labels.values[Number(index)];
+    const result = el("p", "vw-cex-result");
+    const check = el("button", "vw-link-button", "Check with the network in the browser");
+    check.type = "button";
+    check.addEventListener("click", async () => {
+      check.disabled = true;
+      result.textContent = "Running the network…";
+      try {
+        const outcome = await confirmCounterexample(networks[0].bytes, original, matrix, label);
+        if (outcome.sign == null) {
+          result.textContent = `Not confirmed: the network still answers ${outcome.predicted} (label ${label}) with the perturbation added or subtracted. Rounding in the printed values can cause this near a boundary.`;
+          return;
+        }
+        const perturbed = original.map((r, i) => r.map((x, j) => x + outcome.sign * matrix[i][j]));
+        pictures.append(figure(drawMatrix(perturbed, { label: "perturbed image" }), `image ${outcome.sign < 0 ? "−" : "+"} ${name}`));
+        result.textContent =
+          `Confirmed by onnxruntime: the network answers ${outcome.predicted} instead of ${label}.` +
+          (outcome.valid ? "" : " (Some pixels leave [0, 1].)");
+        result.classList.add("is-confirmed");
+      } catch (error) {
+        result.textContent = `Could not run the network here: ${error.message}`;
+        check.disabled = false;
+      }
+    });
+    box.append(check, result);
+  }
+  const raw = el("details", "vw-cex-raw");
+  raw.append(el("summary", "", "Values"), el("pre", "mono", value.raw));
+  box.append(raw);
+  return box;
 }
 
 function headline(job, rows, parsed) {
@@ -775,9 +905,82 @@ function renderFullOutput(job, fallback) {
     onClick: () => downloadTextFile(displayText(runner.job?.output ?? ""), "vehicle-output.txt", "text/plain"),
   });
   download.classList.add("vw-small");
-  actions.append(copy, download);
+  const record = button("Run record", {
+    title: "Versions, image, input hashes, verdicts and the command that repeats this run (JSON)",
+    onClick: async () => downloadTextFile(JSON.stringify(await runRecord(), null, 2), "easynnv-run.json", "application/json"),
+  });
+  record.classList.add("vw-small");
+  actions.append(copy, download, record);
   details.append(summary, actions, el("pre", "mono output-box vw-output-text", text || "(no output yet)"));
   return details;
+}
+
+// ---- run record ---------------------------------------------------------------------------------
+
+async function sha256(bytes) {
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  return Array.from(digest, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+const fileNameOf = (name, file, extension) => {
+  const base = (file?.fileName ?? name).replace(/ \(example\)$/, "").replace(/, first \d+$/, "");
+  return /\.[a-z0-9]+$/i.test(base) ? base : `${name}.${extension}`;
+};
+
+/** Everything needed to repeat the last run: inputs (with hashes), versions, limits, verdicts, command. */
+async function runRecord() {
+  const run = lastRun;
+  const job = runner.job;
+  const versions = run.info?.versions ?? {};
+  const files = async (entries, extension) =>
+    Object.fromEntries(
+      await Promise.all(
+        Object.entries(entries).map(async ([name, f]) => [
+          name,
+          {
+            file: fileNameOf(name, f, f.extension ?? extension),
+            bytes: f.bytes.length,
+            sha256: await sha256(f.bytes),
+            ...(/, first (\d+)/.test(f.fileName ?? "") ? { note: `only the first ${/, first (\d+)/.exec(f.fileName)[1]} entries of this file` } : {}),
+          },
+        ]),
+      ),
+    );
+  const networks = await files(run.job.networks, "onnx");
+  const datasets = await files(run.job.datasets, "idx");
+  const published = /^\d{4}-\d{2}-\d{2}-[0-9a-f]{7}$/.test(versions.image ?? "");
+  const image = published ? `${IMAGE}:${versions.image}` : IMAGE;
+  const args = [
+    "verify --solver Marabou -s spec.vcl",
+    ...Object.entries(networks).map(([n, f]) => `-n ${n}:${f.file}`),
+    ...Object.entries(datasets).map(([n, f]) => `-d ${n}:${f.file}`),
+    ...Object.entries(run.job.parameters).map(([n, v]) => `-p ${n}:${v}`),
+    ...run.job.properties.map((p) => `-y ${p}`),
+  ];
+  const parsed = parseVehicleOutput(job?.output ?? "");
+  return {
+    tool: "easyNNV Verify",
+    page: window.location.href.split("#")[0],
+    started: run.started,
+    outcome: { status: job?.status, outcome: job?.outcome, exitCode: job?.exitCode, seconds: job?.seconds },
+    verdicts: parsed.properties.map((p) => ({ property: p.name, verdict: p.verdict, message: p.message })),
+    runner: {
+      image,
+      imageRevision: versions.image ?? "unknown",
+      pinned: published,
+      vehicle: versions.vehicle,
+      maraboupy: versions.maraboupy,
+      python: versions.python,
+      packages: versions.packages ?? [],
+      limits: { memoryGB: run.memory, cpus: 2, timeoutSeconds: run.job.timeout },
+    },
+    inputs: { specification: run.job.specification, networks, datasets, parameters: run.job.parameters, properties: run.job.properties },
+    repeat: {
+      note: "Save the specification as spec.vcl next to the input files, then run this in that folder.",
+      command: `docker run --rm --platform=linux/amd64 -v "$PWD":/work -w /tmp --entrypoint sh ${image} -c 'cp -r /work/. . && vehicle ${args.join(" ")}'`,
+    },
+    output: displayText(job?.output ?? ""),
+  };
 }
 
 function renderResults(found) {

@@ -22,9 +22,13 @@ export function renderMethodPage({ renderMath }) {
       p("For each point or property, Estimate gives one of three answers:"),
       cards(
         [
-          { tone: "certified", title: "Certified", text: "Proven robust (or safe). CROWN bounds show that no input in the box can change the answer." },
-          { tone: "counterexample", title: "Counterexample", text: "Proven not robust (or unsafe). An attack found a failing input, and onnxruntime confirmed it." },
-          { tone: "unknown", title: "Unknown", text: "Neither. The bounds were too loose to prove it, and the attack found no counterexample." },
+          {
+            tone: "certified",
+            title: "Certified",
+            text: "CROWN bounds show that no input in the box changes the answer, in real arithmetic on the float64 network (as in VNN-COMP). Not a floating-point-sound proof.",
+          },
+          { tone: "counterexample", title: "Counterexample", text: "Definitely not robust (or unsafe): a concrete failing input, found by the attack and re-checked with onnxruntime." },
+          { tone: "unknown", title: "Unknown", text: "Neither. The bounds were too loose to certify it, and the attack found no counterexample." },
         ],
         "docs-verdicts",
       ),
@@ -50,22 +54,27 @@ export function renderMethodPage({ renderMath }) {
           ["Property", "Specification", "Methods"],
           [
             ["Classification robustness", "CSV of inputs and labels, radius ε", "CROWN, then the attack"],
-            [["Regression robustness: bounded change", note("‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ")], "CSV of inputs, ε and δ", "Attack only"],
-            [["Regression robustness: Lipschitz bound", note("‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞")], "CSV of inputs, ε and L", "Attack only"],
+            [["Regression: standard robustness", note("‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ δ")], "CSV of inputs, ε and δ", "Attack only"],
+            [["Regression: Lipschitz robustness", note("‖x − x*‖∞ ≤ ε ⇒ ‖f(x) − f(x*)‖∞ ≤ L‖x − x*‖∞")], "CSV of inputs, ε and L", "Attack only"],
             [["Output constraints", note("input box ⇒ unsafe output condition")], "VNNLIB property files", "CROWN, input splitting, then the attack"],
           ],
         ),
         defs([
-          ["Bounded change", "The attack maximises the output change and reports the largest value found; a value above δ is a counterexample."],
-          ["Lipschitz bound", "The attack maximises the ratio; the largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio."],
+          ["Standard robustness", "The attack maximises the output change and reports the largest value found; a value above δ is a counterexample. Below δ means only that no violation was found."],
+          ["Lipschitz robustness", "The attack maximises the ratio; the largest value found is a lower bound on the local Lipschitz constant. Distances below 1% of ε are floored, so float32 noise cannot inflate the ratio."],
           ["Output constraints", "Your own VNN-COMP property files (input boxes and linear output conditions combined with and/or). Each property is certified safe, shown unsafe by a counterexample, or left unknown."],
         ]),
+        p(
+          "The regression notions follow ",
+          link("https://doi.org/10.1007/978-3-031-13185-1_11", "Casadio et al., “Neural Network Robustness as a Verification Property: A Principled Case Study” (CAV 2022)"),
+          ". Both are checked by the attack only, so they can be shown violated but never certified.",
+        ),
         p(
           "Robust accuracy is reported as a range: the certified share is a lower bound, the share without a counterexample an upper bound. The range collapses to the exact value when nothing is unknown.",
         ),
         callout("ε is in the model's own input units. If the network expects normalised inputs, ε and the points must be normalised too."),
         callout(
-          "Neither method is complete. Certification is sound but can fail to prove robust points robust; the attack can miss counterexamples. Only a complete verifier (for example α,β-CROWN or Marabou) is guaranteed to decide every point.",
+          "Neither method is complete. Certification can fail to certify robust points, and it holds for the real-valued network (with a float32 safety margin), not as a floating-point-sound proof; the attack can miss counterexamples. Only a complete verifier (for example α,β-CROWN or Marabou) decides every point.",
           "note",
         ),
       ],
@@ -74,7 +83,7 @@ export function renderMethodPage({ renderMath }) {
       id: "crown",
       title: "Certification (CROWN)",
       toc: "Certification",
-      summary: "CROWN passes linear bounds backwards through the network to prove that no input in the box can change the answer.",
+      summary: "CROWN passes linear bounds backwards through the network to show that no input in the box can change the answer.",
       body: [
         subhead("The network as a chain of layers"),
         p(
@@ -96,7 +105,7 @@ export function renderMethodPage({ renderMath }) {
         math(String.raw`a\,z \;\le\; \mathrm{relu}(z) \;\le\; \frac{u\,(z - l)}{u - l},\qquad a = \begin{cases} 1 & u \ge -l \\ 0 & \text{otherwise.} \end{cases}`),
         defs([
           ["Hidden-layer intervals", "Each layer's [l, u] comes from the same backward pass applied to that layer, intersected with interval arithmetic. Layers wider than 1,024 units use interval arithmetic alone (much cheaper). The first layer's intervals are exact."],
-          ["Certified when", "For a point: the smallest margin bound is positive. For a property: every unsafe case contains a condition that provably cannot hold. The bound holds for every input in the box."],
+          ["Certified when", "For a point: the smallest margin bound is positive. For a property: the bounds show that every unsafe case contains a condition that cannot hold anywhere in the box."],
         ]),
 
         subhead("Limits and safeguards"),
@@ -110,7 +119,7 @@ export function renderMethodPage({ renderMath }) {
             el("strong", "", "Float32 margin. "),
             "Bounds are computed in float64 for the real-valued network, but the network runs in float32. A bound only counts if it clears its threshold by the larger of 10⁻⁵ × max(1, |threshold|) and ten times the largest float32 disagreement the self-test measured. A safety margin, not a formal float32 proof.",
           ],
-          "Certified points and properties are not attacked. Certification applies to classification and regression properties; the standard and Lipschitz checks are attack-only.",
+          "Certified points and properties are not attacked. Certification applies to classification and output-constraint properties; standard and Lipschitz robustness are attack-only.",
         ]),
       ],
     },
@@ -194,6 +203,10 @@ export function renderMethodPage({ renderMath }) {
       title: "Built-in benchmarks",
       summary: "Published VNN-COMP instances, fetched from the competition repositories at pinned commits and shown next to their published verdicts.",
       body: [
+        callout(
+          "Chosen among benchmarks whose operators the tool supports (fully connected and convolutional ReLU networks) and that are small enough for a browser. Left out: the two malbeware CNNs and the six largest nn4sys properties. Other VNN-COMP benchmarks are not included; many use operators (pooling, residual connections, other activations) or sizes the tool does not support. Results on other networks may be worse.",
+          "note",
+        ),
         subhead("Classification"),
         p("Each property file defines a box clip(x ± ε, 0, 1) around a test image, and the image and label are recovered from it. The 2022 images are snapped to k/255; the 2025 images are the box centres."),
         table(
